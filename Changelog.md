@@ -1,5 +1,13 @@
 ## Changelog
 
 ### April 17:
-- start MOSIP Auth Code from template
-- I didn't have access to the MOSIP keys, so config.toml file is unchanged
+- Started refactoring MOSIP Auth Code from template:
+    - refactored Y/N Auth Code to dynamically take in a payload from an HTTP POST from the ESP32x using FastAPI
+    - made class ScannedIDPayload to structure the payload into a DemographicsData
+    - refactored authentication function to take in all ID fields as part of the MOSIP authentication check
+    - refactored to return the authstatus
+    - placed template API key codes bc it might be important for cloud integration
+- Next:
+    - add MOSIP keys and other dependencies
+    - recheck the API thingy
+    - check cloud integration
