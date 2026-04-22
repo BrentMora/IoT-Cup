@@ -19,15 +19,15 @@ symmetric_key_size = 256
 symmetric_nonce_size = 128
 symmetric_gcm_tag_size = 128
 # certificate from the below path is used to encrypt the Auth Request.
-encrypt_cert_path = "CHANGE THIS TO IDA PARTNER CERT PATH"
+encrypt_cert_path = "dependencies/pdec_ida_partner.pem"
 # used to decrypt the received response
-decrypt_p12_file_path = "CHANGE THIS TO KEYSTORE FILE PATH"
+decrypt_p12_file_path = "dependencies/keystore.p12"
 decrypt_p12_file_password = "cs145-252-9@12345"
 
 [crypto_signature]
 algorithm = "RS256"
-sign_p12_file_path = "CHANGE THIS TO SIGNED KEYSTORE FILE PATH"
-sign_p12_file_password = "CHANGE THIS TO SIGNED KEYSTORE FILE PASSWORD"
+sign_p12_file_path = "dependencies/keystore-signed.p12"
+sign_p12_file_password = "cs145-252-9@12345"
 
 [logging]
 log_file_path = "authenticator.log"
