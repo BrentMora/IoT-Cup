@@ -6,9 +6,9 @@ ida_auth_request_kyc_id = "mosip.identity.kyc"
 ida_auth_request_otp_id = "mosip.identity.otp"
 ida_auth_env = "Staging"
 authorization_header_constant = "Authorization"
-partner_misp_lk = "CHANGE THIS TO MISP LICENSE KEY"
-partner_id = "CHANGE THIS TO PARTNER ID"
-partner_apikey = "CHANGE THIS TO PARTNER API KEY"
+partner_misp_lk = "8M9eODeLeEJKcY4EP5JkQSTIDS9xOqdXCQFnLa2AVuMjY1W6t5"
+partner_id = "cs145-252-9"
+partner_apikey = "831368"
 
 [mosip_auth_server]
 ida_auth_domain_uri = "https://api-internal.pdec.mosip.net"
@@ -22,7 +22,7 @@ symmetric_gcm_tag_size = 128
 encrypt_cert_path = "CHANGE THIS TO IDA PARTNER CERT PATH"
 # used to decrypt the received response
 decrypt_p12_file_path = "CHANGE THIS TO KEYSTORE FILE PATH"
-decrypt_p12_file_password = "CHANGE THIS TO KEYSTORE FILE PASSWORD"
+decrypt_p12_file_password = "cs145-252-9@12345"
 
 [crypto_signature]
 algorithm = "RS256"
