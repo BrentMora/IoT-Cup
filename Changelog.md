@@ -17,6 +17,9 @@
 - added dependencies (MOSIP keys etc.)
 - filled in config.toml file
 - added local set up testing instructions
-- tested => 
+- tested => PASSED 7/7 TEST CASES
 - Fixes:
     - added wrapping to all necessary values
+    - returned whole response for now
+- Next:
+    - edit code to only return authstatus

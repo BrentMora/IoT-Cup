@@ -24,7 +24,7 @@ async def authenticate(payload: ScannedIDPayload):
         location1=wrap(payload.location1),
         location3=wrap(payload.location3),
         zone=wrap(payload.zone),
-        postal_code=wrap(payload.postal_code),
+        postal_code=payload.postal_code,
         address_line1=wrap(payload.address_line1),
         address_line2=wrap(payload.address_line2),
         address_line3=wrap(payload.address_line3),
@@ -41,7 +41,4 @@ async def authenticate(payload: ScannedIDPayload):
     except Exception as e:
         raise HTTPException(status_code=503, detail="Identity service unavailable")
 
-    return {
-        "authStatus": response_body.get("authStatus", False),
-        "errors":     response_body.get("errors", None),
-    }
+    return (response_body) # edit to make it only return authstatus
