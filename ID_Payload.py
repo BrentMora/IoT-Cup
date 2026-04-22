@@ -14,7 +14,8 @@ class ScannedIDPayload(BaseModel):
     address_line3: Optional[str] = None
 
     # ansure the UIN is not blank
-    @validator("uin")
+    @field_validator("uin")
+    @classmethod
     def uin_must_not_be_empty(cls, v):
         if not v.strip():
             raise ValueError("UIN cannot be empty")
