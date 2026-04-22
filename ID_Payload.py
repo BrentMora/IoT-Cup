@@ -1,3 +1,6 @@
+from pydantic import BaseModel, validator
+from typing import Optional
+
 class ScannedIDPayload(BaseModel):
     uin:           str
     name:          Optional[str] = None
