@@ -13,6 +13,4 @@
     - check cloud integration
 
 ### April 22:
-- Started setting up Render cloud service with DB
-- Next:
-    - add MOSIP keys hehe
+- Cleaned code for AWS migration (removed unnecessary dependencies)
