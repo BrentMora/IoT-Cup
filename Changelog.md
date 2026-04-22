@@ -18,3 +18,5 @@
 - filled in config.toml file
 - added local set up testing instructions
 - tested => 
+- Fixes:
+    - added wrapping to all necessary values
