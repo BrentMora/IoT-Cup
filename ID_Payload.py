@@ -1,4 +1,4 @@
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, field_validator
 from typing import Optional
 
 class ScannedIDPayload(BaseModel):
@@ -13,7 +13,6 @@ class ScannedIDPayload(BaseModel):
     address_line2: Optional[str] = None
     address_line3: Optional[str] = None
 
-    # ansure the UIN is not blank
     @field_validator("uin")
     @classmethod
     def uin_must_not_be_empty(cls, v):
