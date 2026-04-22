@@ -16,3 +16,5 @@
 - Cleaned code for AWS migration (removed unnecessary dependencies)
 - added dependencies (MOSIP keys etc.)
 - filled in config.toml file
+- added local set up testing instructions
+- tested => 
