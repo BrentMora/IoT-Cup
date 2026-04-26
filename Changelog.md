@@ -26,4 +26,7 @@
 
 ### April 26:
 - Started drafting query code (all files under "querying")
+- queries db, updates it, and only returns true or false
 - Designed to be easily integrated with actual database
+- In process:
+    - implementing
