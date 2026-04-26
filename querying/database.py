@@ -29,15 +29,11 @@ def query_and_update(payload: dict) -> bool:
     2. Update the DB.
     3. Return True on success, False otherwise.
 
-    Expected payload keys:
-        - "id"     (int)  : record to look up
-        - "status" (str)  : new status value to write
     """
-    record_id = payload.get("id")
-    new_status = payload.get("status")
+    record_uin = payload.get("uin")
 
     if record_id is None or new_status is None:
-        print("Payload missing 'id' or 'status'")
+        print("Payload missing necesary fields.")
         return False
 
     try:
@@ -45,17 +41,17 @@ def query_and_update(payload: dict) -> bool:
         cursor = conn.cursor()
 
         # --- Step 1: Query ---
-        cursor.execute("SELECT * FROM items WHERE id = ?", (record_id,))
+        cursor.execute("SELECT * FROM items WHERE uin = ?", (record_uin,))
         row = cursor.fetchone()
 
         if not row:
-            print(f"No record found with id={record_id}")
+            print(f"No record found with id={record_uin}")
             conn.close()
             return False
 
-        print(f"Found record: id={row['id']}, name={row['name']}, status={row['status']}")
+        print(f"Found record.")
 
-        # --- Step 2: Update ---
+        # --- Step 2: Update [for gate entry] ---
         cursor.execute(
             "UPDATE items SET status = ? WHERE id = ?",
             (new_status, record_id)

@@ -17,23 +17,24 @@ def init():
 
     # Create table
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS items (
-            id      INTEGER PRIMARY KEY,
-            name    TEXT    NOT NULL,
-            status  TEXT    NOT NULL DEFAULT 'pending'
+        CREATE TABLE IF NOT EXISTS db (
+            uin      TEXT PRIMARY KEY,
+            precinct    INTEGER    NOT NULL,
+            voting  INTEGER    NOT NULL DEFAULT '0'
+            voted   INTEGER    NOT NULL DEFAULT '0'
         )
     """)
 
     # Seed with sample rows (skip if already populated)
-    cursor.execute("SELECT COUNT(*) FROM items")
+    cursor.execute("SELECT COUNT(*) FROM db")
     if cursor.fetchone()[0] == 0:
         sample_data = [
-            (1, "Alpha",   "pending"),
-            (2, "Beta",    "pending"),
-            (3, "Gamma",   "pending"),
+            ("67", 67, 0, 0),
+            ("68", 68, 0, 0),
+            ("69", 69, 0, 0),
         ]
         cursor.executemany(
-            "INSERT INTO items (id, name, status) VALUES (?, ?, ?)",
+            "INSERT INTO items (uin, precinct, voting, voted) VALUES (?, ?, ?, ?)",
             sample_data
         )
         print("Seeded 3 sample rows.")
