@@ -23,3 +23,7 @@
     - returned whole response for now
 - Next:
     - edit code to only return authstatus
+
+### April 26:
+- Started drafting query code (all files under "querying")
+- Designed to be easily integrated with actual database

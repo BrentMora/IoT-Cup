@@ -1,0 +1,8 @@
+flask
+python-dotenv
+
+# Uncomment the driver for your production DB when the time comes:
+# psycopg2-binary   # PostgreSQL
+# pymysql           # MySQL
+# boto3             # DynamoDB
+# pymongo           # MongoDB
