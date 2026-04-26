@@ -28,5 +28,10 @@
 - Started drafting query code (all files under "querying")
 - queries db, updates it, and only returns true or false
 - Designed to be easily integrated with actual database
-- In process:
-    - implementing
+- full working pipeline [Gate Entry only]:
+    - Server has *input_uin* and *curr_precinct*
+    - checks the database for existence of *input_uin*
+    - IF *input_uin* is there, check the following:
+    1.  Voting = 0, Voted = 0
+    2. (assigned) precinct = curr_precinct
+    - IF all match, then return true, else false

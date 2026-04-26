@@ -64,17 +64,17 @@ Open a **second** terminal window (keep the first one running the server).
 
 **Test with a valid ID — expect `{"success": true}`**
 ```powershell
-Invoke-WebRequest -Uri http://localhost:5000/process -Method POST -ContentType "application/json" -Body '{"id": 1, "status": "done"}'
+Invoke-WebRequest -Uri http://localhost:5000/process -Method POST -ContentType "application/json" -Body '{"uin": "67", "precinct": 67}'
 ```
 
 **Test with an invalid ID — expect `{"success": false}`**
 ```powershell
-Invoke-WebRequest -Uri http://localhost:5000/process -Method POST -ContentType "application/json" -Body '{"id": 99, "status": "done"}'
+Invoke-WebRequest -Uri http://localhost:5000/process -Method POST -ContentType "application/json" -Body '{"uin": "70", "precinct": 69}'
 ```
 
-**Test with a missing field — expect `{"success": false}`**
+**Test an invalid precinct — expect `{"success": false}`**
 ```powershell
-Invoke-WebRequest -Uri http://localhost:5000/process -Method POST -ContentType "application/json" -Body '{"id": 1}'
+Invoke-WebRequest -Uri http://localhost:5000/process -Method POST -ContentType "application/json" -Body '{"uin": "68", "precinct": 69}'
 ```
 
 > In PowerShell, look for the **`Content`** line in the response output — that's your actual result.
@@ -87,34 +87,22 @@ Invoke-WebRequest -Uri http://localhost:5000/process -Method POST -ContentType "
 ```bash
 curl -X POST http://localhost:5000/process \
   -H "Content-Type: application/json" \
-  -d '{"id": 1, "status": "done"}'
+  -d '{"uin": "67", "precinct": 67}'
 ```
 
 **Test with an invalid ID — expect `{"success": false}`**
 ```bash
 curl -X POST http://localhost:5000/process \
   -H "Content-Type: application/json" \
-  -d '{"id": 99, "status": "done"}'
+  -d '{"uin": "70", "precinct": 69}'
 ```
 
-**Test with a missing field — expect `{"success": false}`**
+**Test an invalid precinct — expect `{"success": false}`**
 ```bash
 curl -X POST http://localhost:5000/process \
   -H "Content-Type: application/json" \
-  -d '{"id": 1}'
+  -d '{"uin": "68", "precinct": 69}'
 ```
-
----
-
-### Test Data (Seeded by `init_db.py`)
-
-| id | name  | status  |
-|----|-------|---------|
-| 1  | Alpha | pending |
-| 2  | Beta  | pending |
-| 3  | Gamma | pending |
-
-Use any of these IDs in your tests.
 
 ---
 

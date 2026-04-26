@@ -28,12 +28,12 @@ def query_and_update(payload: dict) -> bool:
     1. Query the DB using data from payload.
     2. Update the DB.
     3. Return True on success, False otherwise.
-
     """
-    record_uin = payload.get("uin")
+    input_uin = payload.get("uin")
+    curr_precinct = payload.get("precinct")
 
-    if record_id is None or new_status is None:
-        print("Payload missing necesary fields.")
+    if input_uin is None:
+        print("Payload missing necessary fields.")
         return False
 
     try:
@@ -41,26 +41,39 @@ def query_and_update(payload: dict) -> bool:
         cursor = conn.cursor()
 
         # --- Step 1: Query ---
-        cursor.execute("SELECT * FROM items WHERE uin = ?", (record_uin,))
+        cursor.execute("SELECT * FROM db WHERE uin = ?", (input_uin,))
         row = cursor.fetchone()
 
+        # deny voters not in the db
+
         if not row:
-            print(f"No record found with id={record_uin}")
+            print(f"No record found with uin={input_uin}")
             conn.close()
             return False
 
         print(f"Found record.")
 
         # --- Step 2: Update [for gate entry] ---
-        cursor.execute(
-            "UPDATE items SET status = ? WHERE id = ?",
-            (new_status, record_id)
-        )
-        conn.commit()
-        print(f"Updated id={record_id} → status='{new_status}'")
+        
+        '''
+            [Gate Entry]
+            If not voted and not voting and they are at the right precinct, let them enter the gate.
+            Set voting to True.
 
-        conn.close()
-        return True
+        '''
+
+        if row["voting"] == 0 and row["voted"] == 0 and curr_precinct == row["precinct"]:
+            cursor.execute(
+                "UPDATE db SET voting = ? WHERE uin = ?",
+                (1, input_uin)
+            )
+            conn.commit()
+            conn.close()
+            return True
+        else:
+            print(f"uin={input_uin} has already voted.")
+            conn.close()
+            return False
 
     except Exception as e:
         print(f"DB error: {e}")

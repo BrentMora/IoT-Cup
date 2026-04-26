@@ -18,10 +18,10 @@ def init():
     # Create table
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS db (
-            uin      TEXT PRIMARY KEY,
-            precinct    INTEGER    NOT NULL,
-            voting  INTEGER    NOT NULL DEFAULT '0'
-            voted   INTEGER    NOT NULL DEFAULT '0'
+            uin      TEXT    PRIMARY KEY,
+            precinct INTEGER NOT NULL,
+            voting   INTEGER NOT NULL DEFAULT 0,
+            voted    INTEGER NOT NULL DEFAULT 0
         )
     """)
 
@@ -34,7 +34,7 @@ def init():
             ("69", 69, 0, 0),
         ]
         cursor.executemany(
-            "INSERT INTO items (uin, precinct, voting, voted) VALUES (?, ?, ?, ?)",
+            "INSERT INTO db (uin, precinct, voting, voted) VALUES (?, ?, ?, ?)",
             sample_data
         )
         print("Seeded 3 sample rows.")
