@@ -1,17 +1,30 @@
 from flask import Flask, request, jsonify
-from database import query_and_update
+from database import process_entry, process_exit
 
 app = Flask(__name__)
 
-@app.route("/process", methods=["POST"])
-def process():
+@app.route("/enterRequest", methods=["POST"])
+def enterRequest():
     payload = request.get_json()
 
     if not payload:
         return jsonify({"success": False, "error": "Invalid payload"}), 400
 
     try:
-        result = query_and_update(payload)
+        result = process_entry(payload)
+        return jsonify({"success": result})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route("/exitRequest", methods=["POST"])
+def exitRequest():
+    payload = request.get_json()
+
+    if not payload:
+        return jsonify({"success": False, "error": "Invalid payload"}), 400
+
+    try:
+        result = process_exit(payload)
         return jsonify({"success": result})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
