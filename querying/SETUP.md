@@ -26,7 +26,7 @@ pip install -r requirements.txt
 ```
 
 ### Step 2 — Create the local test database
-Run this **once**. It creates `local_test.db` with a sample `items` table.
+Run this **once**. It creates `local_test.db` with a sample `db` table.
 ```bash
 python init_db.py
 ```
@@ -60,55 +60,155 @@ You should see:
 
 Open a **second** terminal window (keep the first one running the server).
 
+There are two endpoints to test. A full voter flow is: **entry → exit**.
+
+### Test Data (Seeded by `init_db.py`)
+
+| uin | precinct | voting | voted |
+|-----|----------|--------|-------|
+| 67  | 67       | 0      | 0     |
+| 68  | 68       | 0      | 0     |
+| 69  | 69       | 0      | 0     |
+
+---
+
 ### On Windows (PowerShell)
 
-**Test with a valid ID — expect `{"success": true}`**
+> Look for the **`Content`** line in the response output — that's your actual result.
+
+#### `/enterRequest`
+
+**Valid entry (uin exists, right precinct, not yet voting/voted) — expect `{"success": true}`**
 ```powershell
-Invoke-WebRequest -Uri http://localhost:5000/process -Method POST -ContentType "application/json" -Body '{"uin": "67", "precinct": 67}'
+Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "67", "precinct": 67}'
 ```
 
-**Test with an invalid ID — expect `{"success": false}`**
+**Already voting or voted — expect `{"success": false}`**
 ```powershell
-Invoke-WebRequest -Uri http://localhost:5000/process -Method POST -ContentType "application/json" -Body '{"uin": "70", "precinct": 69}'
+Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "67", "precinct": 67}'
+```
+*(Run this immediately after the valid entry above — uin 67 is now voting=1)*
+
+**Wrong precinct — expect `{"success": false}`**
+```powershell
+Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "68", "precinct": 99}'
 ```
 
-**Test an invalid precinct — expect `{"success": false}`**
+**UIN not in DB — expect `{"success": false}`**
 ```powershell
-Invoke-WebRequest -Uri http://localhost:5000/process -Method POST -ContentType "application/json" -Body '{"uin": "68", "precinct": 69}'
+Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "999", "precinct": 67}'
 ```
 
-> In PowerShell, look for the **`Content`** line in the response output — that's your actual result.
+**Missing uin field — expect `{"success": false}`**
+```powershell
+Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body '{"precinct": 67}'
+```
+
+---
+
+#### `/exitRequest`
+
+*(First run a valid `/enterRequest` for uin 68 so it is in voting=1 state)*
+```powershell
+Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "68", "precinct": 68}'
+```
+
+**Valid exit (currently voting, not yet voted, right precinct) — expect `{"success": true}`**
+```powershell
+Invoke-WebRequest -Uri http://localhost:5000/exitRequest -Method POST -ContentType "application/json" -Body '{"uin": "68", "precinct": 68}'
+```
+
+**Not currently voting (never entered) — expect `{"success": false}`**
+```powershell
+Invoke-WebRequest -Uri http://localhost:5000/exitRequest -Method POST -ContentType "application/json" -Body '{"uin": "69", "precinct": 69}'
+```
+
+**Already voted (voted=1) — expect `{"success": false}`**
+```powershell
+Invoke-WebRequest -Uri http://localhost:5000/exitRequest -Method POST -ContentType "application/json" -Body '{"uin": "68", "precinct": 68}'
+```
+*(Run immediately after the valid exit above — uin 68 is now voted=1)*
 
 ---
 
 ### On Mac / Linux / Git Bash
 
-**Test with a valid ID — expect `{"success": true}`**
+#### `/enterRequest`
+
+**Valid entry — expect `{"success": true}`**
 ```bash
-curl -X POST http://localhost:5000/process \
+curl -X POST http://localhost:5000/enterRequest \
   -H "Content-Type: application/json" \
   -d '{"uin": "67", "precinct": 67}'
 ```
 
-**Test with an invalid ID — expect `{"success": false}`**
+**Already voting or voted — expect `{"success": false}`**
 ```bash
-curl -X POST http://localhost:5000/process \
+curl -X POST http://localhost:5000/enterRequest \
   -H "Content-Type: application/json" \
-  -d '{"uin": "70", "precinct": 69}'
+  -d '{"uin": "67", "precinct": 67}'
+```
+*(Run immediately after the valid entry above)*
+
+**Wrong precinct — expect `{"success": false}`**
+```bash
+curl -X POST http://localhost:5000/enterRequest \
+  -H "Content-Type: application/json" \
+  -d '{"uin": "68", "precinct": 99}'
 ```
 
-**Test an invalid precinct — expect `{"success": false}`**
+**UIN not in DB — expect `{"success": false}`**
 ```bash
-curl -X POST http://localhost:5000/process \
+curl -X POST http://localhost:5000/enterRequest \
   -H "Content-Type: application/json" \
-  -d '{"uin": "68", "precinct": 69}'
+  -d '{"uin": "999", "precinct": 67}'
 ```
+
+**Missing uin field — expect `{"success": false}`**
+```bash
+curl -X POST http://localhost:5000/enterRequest \
+  -H "Content-Type: application/json" \
+  -d '{"precinct": 67}'
+```
+
+---
+
+#### `/exitRequest`
+
+*(First run a valid `/enterRequest` for uin 68 so it is in voting=1 state)*
+```bash
+curl -X POST http://localhost:5000/enterRequest \
+  -H "Content-Type: application/json" \
+  -d '{"uin": "68", "precinct": 68}'
+```
+
+**Valid exit — expect `{"success": true}`**
+```bash
+curl -X POST http://localhost:5000/exitRequest \
+  -H "Content-Type: application/json" \
+  -d '{"uin": "68", "precinct": 68}'
+```
+
+**Not currently voting (never entered) — expect `{"success": false}`**
+```bash
+curl -X POST http://localhost:5000/exitRequest \
+  -H "Content-Type: application/json" \
+  -d '{"uin": "69", "precinct": 69}'
+```
+
+**Already voted — expect `{"success": false}`**
+```bash
+curl -X POST http://localhost:5000/exitRequest \
+  -H "Content-Type: application/json" \
+  -d '{"uin": "68", "precinct": 68}'
+```
+*(Run immediately after the valid exit above)*
 
 ---
 
 ## 4. Switching to the Real Database
 
-Once database is done only **`database.py`** needs to change. Everything else (`app.py`, `requirements.txt`, etc.) stays the same.
+Once your teammate provides the database details, only **`database.py`** needs to change. Everything else (`app.py`, `requirements.txt`, etc.) stays the same.
 
 ### Step 1 — Install the correct driver
 
@@ -150,20 +250,20 @@ def get_connection():
 
 ---
 
-### Step 3 — Update the SQL in `query_and_update()`
+### Step 3 — Update the SQL in `process_entry()` and `process_exit()`
 
-SQLite uses `?` as a placeholder. Most other databases use `%s`. Update accordingly:
+SQLite uses `?` as a placeholder. Most other databases use `%s`. Update accordingly in both functions:
 
 **SQLite (current):**
 ```python
-cursor.execute("SELECT * FROM items WHERE id = ?", (record_id,))
-cursor.execute("UPDATE items SET status = ? WHERE id = ?", (new_status, record_id))
+cursor.execute("SELECT * FROM db WHERE uin = ?", (input_uin,))
+cursor.execute("UPDATE db SET voting = ?, voted = ? WHERE uin = ?", (1, 0, input_uin))
 ```
 
 **PostgreSQL / MySQL:**
 ```python
-cursor.execute("SELECT * FROM items WHERE id = %s", (record_id,))
-cursor.execute("UPDATE items SET status = %s WHERE id = %s", (new_status, record_id))
+cursor.execute("SELECT * FROM db WHERE uin = %s", (input_uin,))
+cursor.execute("UPDATE db SET voting = %s, voted = %s WHERE uin = %s", (1, 0, input_uin))
 ```
 
 Also update the table name and column names to match the real database schema.
@@ -181,11 +281,13 @@ DATABASE_URL=your_real_connection_string_here
 
 ---
 
-## 5. Handing Off
+## 5. Handing Off to Your Teammate
+
+Tell your teammate the following:
 
 - **Start the server:** `python app.py` (or `gunicorn -w 4 app:app` for production)
-- **Endpoint:** `POST /process`
-- **Request format:** JSON body with `id` (int) and `status` (string)
+- **Endpoints:** `POST /enterRequest` and `POST /exitRequest`
+- **Request format:** JSON body with `uin` (string) and `precinct` (int)
 - **Response format:** `{"success": true}` or `{"success": false}`
 - **Required env variable:** `DATABASE_URL` must be set on the server
 
