@@ -124,14 +124,7 @@ def process_exit(payload: dict) -> bool:
         '''
 
         if row["voting"] == 1 and row["voted"] == 0 and curr_precinct == row["precinct"]:
-            cursor.execute(
-                "UPDATE db SET voted = ? WHERE uin = ?",
-                (1, input_uin)
-            )
-            cursor.execute(
-                "UPDATE db SET voting = ? WHERE uin = ?",
-                (0, input_uin)
-            )
+            cursor.execute("UPDATE db SET voted = ?, voting = ? WHERE uin = ?", (1, 0, input_uin))
             conn.commit()
             conn.close()
             return True
