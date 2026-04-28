@@ -9,11 +9,40 @@
 ```
 querying/
 ├── app.py            # Flask server — handles incoming HTTP requests
-├── database.py       # All database logic — query and update
+├── database.py       # All database logic — hashing, query, and update
 ├── init_db.py        # One-time script to create and seed the local test DB
 ├── requirements.txt  # Python dependencies
 └── .env.example      # Template for environment variables
 ```
+
+---
+
+## Database Schema
+
+```sql
+CREATE TABLE voters (
+    id_hash     CHAR(64)    PRIMARY KEY,  -- SHA-256 hash of the voter's UIN
+    precinct_id VARCHAR(20) NOT NULL,
+    is_voting   BOOLEAN     DEFAULT FALSE,
+    has_voted   BOOLEAN     DEFAULT FALSE,
+    updated_at  TIMESTAMP   DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+> Raw UINs are **never stored**. Incoming UINs are hashed with SHA-256 in `database.py` before any DB query.
+
+---
+
+## How Hashing Works
+
+The payload sends a raw UIN. Before touching the database, `database.py` hashes it:
+
+```python
+import hashlib
+id_hash = hashlib.sha256(uin.encode()).hexdigest()
+```
+
+That hash is then used in all `SELECT` and `UPDATE` queries against `id_hash`.
 
 ---
 
@@ -26,7 +55,7 @@ pip install -r requirements.txt
 ```
 
 ### Step 2 — Create the local test database
-Run this **once**. It creates `local_test.db` with a sample `db` table.
+Run this **once**. It creates `local_test.db` with the `voters` table and 3 seeded rows.
 ```bash
 python init_db.py
 ```
@@ -35,6 +64,13 @@ You should see:
 ```
 Seeded 3 sample rows.
 Database ready: local_test.db
+
+Seeded UINs (for testing):
+  UIN    precinct_id     id_hash
+  ------ --------------- ----------------------------------------------------------------
+  67     67              49d180ecf56132819571bf39d9b7b342522a2ac6d23c1418d3338251bfe469c8
+  68     68              a21855da08cb102d1d217c53dc5824a3a795c1c1a44e971bf01ab9da3a2acbbf
+  69     69              c75cb66ae28d8ebc6eded002c28a8ba0d06d3a78c6b5cbf9b2ade051f0775ac4
 ```
 
 ---
@@ -56,19 +92,30 @@ You should see:
 
 ---
 
-## 3. Testing the API
+## 3. Resetting the Database Between Tests
+
+After a full entry → exit flow, rows are marked `has_voted = TRUE`. Reset to start fresh:
+```bash
+python init_db.py --reset
+```
+
+---
+
+## 4. Testing the API
 
 Open a **second** terminal window (keep the first one running the server).
 
-There are two endpoints to test. A full voter flow is: **entry → exit**.
+The payload always sends the **raw UIN** — the server handles hashing internally.
 
-### Test Data (Seeded by `init_db.py`)
+A full voter flow is: **entry → exit**.
 
-| uin | precinct | voting | voted |
-|-----|----------|--------|-------|
-| 67  | 67       | 0      | 0     |
-| 68  | 68       | 0      | 0     |
-| 69  | 69       | 0      | 0     |
+### Test Data
+
+| UIN | precinct_id | is_voting | has_voted |
+|-----|-------------|-----------|-----------|
+| 67  | 67          | FALSE     | FALSE     |
+| 68  | 68          | FALSE     | FALSE     |
+| 69  | 69          | FALSE     | FALSE     |
 
 ---
 
@@ -78,56 +125,56 @@ There are two endpoints to test. A full voter flow is: **entry → exit**.
 
 #### `/enterRequest`
 
-**Valid entry (uin exists, right precinct, not yet voting/voted) — expect `{"success": true}`**
+**Valid entry — expect `{"success": true}`**
 ```powershell
-Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "67", "precinct": 67}'
+Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "67", "precinct_id": "67"}'
 ```
 
 **Already voting or voted — expect `{"success": false}`**
 ```powershell
-Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "67", "precinct": 67}'
+Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "67", "precinct_id": "67"}'
 ```
-*(Run this immediately after the valid entry above — uin 67 is now voting=1)*
+*(Run immediately after the valid entry above — uin 67 is now is_voting=TRUE)*
 
 **Wrong precinct — expect `{"success": false}`**
 ```powershell
-Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "68", "precinct": 99}'
+Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "68", "precinct_id": "99"}'
 ```
 
 **UIN not in DB — expect `{"success": false}`**
 ```powershell
-Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "999", "precinct": 67}'
+Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "999", "precinct_id": "67"}'
 ```
 
-**Missing uin field — expect `{"success": false}`**
+**Missing field — expect `{"success": false}`**
 ```powershell
-Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body '{"precinct": 67}'
+Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "68"}'
 ```
 
 ---
 
 #### `/exitRequest`
 
-*(First run a valid `/enterRequest` for uin 68 so it is in voting=1 state)*
+*(First run a valid `/enterRequest` for uin 68 so it is in is_voting=TRUE state)*
 ```powershell
-Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "68", "precinct": 68}'
+Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "68", "precinct_id": "68"}'
 ```
 
-**Valid exit (currently voting, not yet voted, right precinct) — expect `{"success": true}`**
+**Valid exit — expect `{"success": true}`**
 ```powershell
-Invoke-WebRequest -Uri http://localhost:5000/exitRequest -Method POST -ContentType "application/json" -Body '{"uin": "68", "precinct": 68}'
+Invoke-WebRequest -Uri http://localhost:5000/exitRequest -Method POST -ContentType "application/json" -Body '{"uin": "68", "precinct_id": "68"}'
 ```
 
 **Not currently voting (never entered) — expect `{"success": false}`**
 ```powershell
-Invoke-WebRequest -Uri http://localhost:5000/exitRequest -Method POST -ContentType "application/json" -Body '{"uin": "69", "precinct": 69}'
+Invoke-WebRequest -Uri http://localhost:5000/exitRequest -Method POST -ContentType "application/json" -Body '{"uin": "69", "precinct_id": "69"}'
 ```
 
-**Already voted (voted=1) — expect `{"success": false}`**
+**Already voted — expect `{"success": false}`**
 ```powershell
-Invoke-WebRequest -Uri http://localhost:5000/exitRequest -Method POST -ContentType "application/json" -Body '{"uin": "68", "precinct": 68}'
+Invoke-WebRequest -Uri http://localhost:5000/exitRequest -Method POST -ContentType "application/json" -Body '{"uin": "68", "precinct_id": "68"}'
 ```
-*(Run immediately after the valid exit above — uin 68 is now voted=1)*
+*(Run immediately after the valid exit above — uin 68 is now has_voted=TRUE)*
 
 ---
 
@@ -139,14 +186,14 @@ Invoke-WebRequest -Uri http://localhost:5000/exitRequest -Method POST -ContentTy
 ```bash
 curl -X POST http://localhost:5000/enterRequest \
   -H "Content-Type: application/json" \
-  -d '{"uin": "67", "precinct": 67}'
+  -d '{"uin": "67", "precinct_id": "67"}'
 ```
 
 **Already voting or voted — expect `{"success": false}`**
 ```bash
 curl -X POST http://localhost:5000/enterRequest \
   -H "Content-Type: application/json" \
-  -d '{"uin": "67", "precinct": 67}'
+  -d '{"uin": "67", "precinct_id": "67"}'
 ```
 *(Run immediately after the valid entry above)*
 
@@ -154,80 +201,68 @@ curl -X POST http://localhost:5000/enterRequest \
 ```bash
 curl -X POST http://localhost:5000/enterRequest \
   -H "Content-Type: application/json" \
-  -d '{"uin": "68", "precinct": 99}'
+  -d '{"uin": "68", "precinct_id": "99"}'
 ```
 
 **UIN not in DB — expect `{"success": false}`**
 ```bash
 curl -X POST http://localhost:5000/enterRequest \
   -H "Content-Type: application/json" \
-  -d '{"uin": "999", "precinct": 67}'
+  -d '{"uin": "999", "precinct_id": "67"}'
 ```
 
-**Missing uin field — expect `{"success": false}`**
+**Missing field — expect `{"success": false}`**
 ```bash
 curl -X POST http://localhost:5000/enterRequest \
   -H "Content-Type: application/json" \
-  -d '{"precinct": 67}'
+  -d '{"uin": "68"}'
 ```
 
 ---
 
 #### `/exitRequest`
 
-*(First run a valid `/enterRequest` for uin 68 so it is in voting=1 state)*
+*(First run a valid `/enterRequest` for uin 68)*
 ```bash
 curl -X POST http://localhost:5000/enterRequest \
   -H "Content-Type: application/json" \
-  -d '{"uin": "68", "precinct": 68}'
+  -d '{"uin": "68", "precinct_id": "68"}'
 ```
 
 **Valid exit — expect `{"success": true}`**
 ```bash
 curl -X POST http://localhost:5000/exitRequest \
   -H "Content-Type: application/json" \
-  -d '{"uin": "68", "precinct": 68}'
+  -d '{"uin": "68", "precinct_id": "68"}'
 ```
 
 **Not currently voting (never entered) — expect `{"success": false}`**
 ```bash
 curl -X POST http://localhost:5000/exitRequest \
   -H "Content-Type: application/json" \
-  -d '{"uin": "69", "precinct": 69}'
+  -d '{"uin": "69", "precinct_id": "69"}'
 ```
 
 **Already voted — expect `{"success": false}`**
 ```bash
 curl -X POST http://localhost:5000/exitRequest \
   -H "Content-Type: application/json" \
-  -d '{"uin": "68", "precinct": 68}'
+  -d '{"uin": "68", "precinct_id": "68"}'
 ```
 *(Run immediately after the valid exit above)*
 
 ---
 
-## 4. Switching to the Real Database
-
-Once your teammate provides the database details, only **`database.py`** needs to change. Everything else (`app.py`, `requirements.txt`, etc.) stays the same.
+## 5. Switching to the Real Database (Supabase / PostgreSQL)
 
 ### Step 1 — Install the correct driver
 
-Uncomment the relevant line in `requirements.txt`, then run `pip install -r requirements.txt`:
-
-| Database   | Driver              |
-|------------|---------------------|
-| PostgreSQL | `psycopg2-binary`   |
-| MySQL      | `pymysql`           |
-| DynamoDB   | `boto3`             |
-| MongoDB    | `pymongo`           |
-
----
+Uncomment in `requirements.txt`, then run `pip install -r requirements.txt`:
+```
+psycopg2-binary
+```
 
 ### Step 2 — Update `get_connection()` in `database.py`
-
-Replace the SQLite block with the appropriate driver connection.
-
-**PostgreSQL example:**
 ```python
 import psycopg2
 
@@ -235,59 +270,54 @@ def get_connection():
     return psycopg2.connect(os.getenv("DATABASE_URL"))
 ```
 
-**MySQL example:**
-```python
-import pymysql
+### Step 3 — Update placeholder syntax in `database.py`
 
-def get_connection():
-    return pymysql.connect(
-        host=os.getenv("DB_HOST"),
-        user=os.getenv("DB_USER"),
-        password=os.getenv("DB_PASSWORD"),
-        database=os.getenv("DB_NAME")
-    )
+SQLite uses `?`, PostgreSQL uses `%s`. Update all four queries in `process_entry` and `process_exit`:
+
+```python
+# SELECT
+cursor.execute("SELECT * FROM voters WHERE id_hash = %s", (id_hash,))
+
+# Entry UPDATE
+cursor.execute(
+    "UPDATE voters SET is_voting = %s, updated_at = CURRENT_TIMESTAMP WHERE id_hash = %s",
+    (True, id_hash)
+)
+
+# Exit UPDATE
+cursor.execute(
+    "UPDATE voters SET has_voted = %s, is_voting = %s, updated_at = CURRENT_TIMESTAMP WHERE id_hash = %s",
+    (True, False, id_hash)
+)
 ```
+
+### Step 4 — Set environment variable on the EC2 server
+```
+DATABASE_URL=postgresql://postgres:[PASSWORD]@[HOST]:5432/postgres
+```
+
+### Step 5 — Create the table in Supabase
+
+Run this in the **Supabase SQL editor**:
+```sql
+CREATE TABLE voters (
+    id_hash     CHAR(64)    PRIMARY KEY,
+    precinct_id VARCHAR(20) NOT NULL,
+    is_voting   BOOLEAN     DEFAULT FALSE,
+    has_voted   BOOLEAN     DEFAULT FALSE,
+    updated_at  TIMESTAMP   DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+> `init_db.py` is for local testing only — your teammate handles the real DB setup.
 
 ---
 
-### Step 3 — Update the SQL in `process_entry()` and `process_exit()`
-
-SQLite uses `?` as a placeholder. Most other databases use `%s`. Update accordingly in both functions:
-
-**SQLite (current):**
-```python
-cursor.execute("SELECT * FROM db WHERE uin = ?", (input_uin,))
-cursor.execute("UPDATE db SET voting = ?, voted = ? WHERE uin = ?", (1, 0, input_uin))
-```
-
-**PostgreSQL / MySQL:**
-```python
-cursor.execute("SELECT * FROM db WHERE uin = %s", (input_uin,))
-cursor.execute("UPDATE db SET voting = %s, voted = %s WHERE uin = %s", (1, 0, input_uin))
-```
-
-Also update the table name and column names to match the real database schema.
-
----
-
-### Step 4 — Set environment variables
-
-Copy `.env.example` to `.env` and fill in the real credentials:
-```
-DATABASE_URL=your_real_connection_string_here
-```
-
-> Never commit `.env` to version control. Add it to `.gitignore`.
-
----
-
-## 5. Handing Off to Your Teammate
-
-Tell your teammate the following:
+## 6. Handing Off to Your Teammate
 
 - **Start the server:** `python app.py` (or `gunicorn -w 4 app:app` for production)
 - **Endpoints:** `POST /enterRequest` and `POST /exitRequest`
-- **Request format:** JSON body with `uin` (string) and `precinct` (int)
+- **Request format:** JSON body with `uin` (string) and `precinct_id` (string)
 - **Response format:** `{"success": true}` or `{"success": false}`
 - **Required env variable:** `DATABASE_URL` must be set on the server
 
@@ -295,10 +325,11 @@ Tell your teammate the following:
 
 ## Quick Reference
 
-| Task                        | Command                                |
-|-----------------------------|----------------------------------------|
-| Install dependencies        | `pip install -r requirements.txt`      |
-| Initialize local test DB    | `python init_db.py`                    |
-| Start the server            | `python app.py`                        |
-| Test (PowerShell)           | `Invoke-WebRequest ...` (see Section 3)|
-| Test (Mac/Linux/Git Bash)   | `curl -X POST ...` (see Section 3)     |
+| Task                        | Command                                        |
+|-----------------------------|------------------------------------------------|
+| Install dependencies        | `pip install -r requirements.txt`              |
+| Initialize local test DB    | `python init_db.py`                            |
+| Reset DB between tests      | `python init_db.py --reset`                    |
+| Start the server            | `python app.py`                                |
+| Test (PowerShell)           | `Invoke-WebRequest ...` (see Section 4)        |
+| Test (Mac/Linux/Git Bash)   | `curl -X POST ...` (see Section 4)             |
