@@ -41,4 +41,4 @@ async def authenticate(payload: ScannedIDPayload):
     except Exception as e:
         raise HTTPException(status_code=503, detail="Identity service unavailable")
 
-    return (response_body) # edit to make it only return authstatus
+    return {"authStatus": response_body.get("response", {}).get("authStatus")}
