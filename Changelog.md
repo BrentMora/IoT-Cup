@@ -49,4 +49,5 @@
 ### April 29:
 - refactored to expect payload with "precinctID"
 - query code now returns {"success": _, "status": _} only
-- MOSIP code now returns only authstatus
+- MOSIP code now returns only authstatus > only changed last line (the return statement)
+- 

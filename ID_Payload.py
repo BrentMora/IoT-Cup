@@ -12,6 +12,7 @@ class ScannedIDPayload(BaseModel):
     address_line1: Optional[str] = None
     address_line2: Optional[str] = None
     address_line3: Optional[str] = None
+    precinctID:    Optional[str] = None
 
     @field_validator("uin")
     @classmethod
