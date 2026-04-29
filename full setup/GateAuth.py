@@ -4,7 +4,7 @@ from mosip_auth_sdk import MOSIPAuthenticator
 from dynaconf import Dynaconf
 
 from ID_Payload import ScannedIDPayload
-from database import process_entry, process_exit  # <-- import DB functions directly
+from database import process_entry, process_exit 
 
 # [1] Config
 config = Dynaconf(settings_files=["./config.toml"], environments=False)

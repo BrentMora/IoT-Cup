@@ -50,4 +50,5 @@
 - refactored to expect payload with "precinctID"
 - query code now returns {"success": _, "status": _} only
 - MOSIP code now returns only authstatus > only changed last line (the return statement)
-- 
+- see **FULL SETUP** folder:
+    - GateAuth.py => fully merged MOSIP + DB Query setup => just returns {authstatus, status} for all cases
