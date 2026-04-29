@@ -35,7 +35,7 @@ def get_connection():
 # Core logic - Entry
 # ---------------------------------------------------------------------------
 
-def process_entry(payload: dict) -> bool:
+def process_entry(payload: dict) -> tuple:
     """
     1. Hash the incoming UIN.
     2. Query the voters table for a matching id_hash.
@@ -47,8 +47,7 @@ def process_entry(payload: dict) -> bool:
     curr_precinct = payload.get("precinctID")
 
     if input_uin is None or curr_precinct is None:
-        print("Payload missing necessary fields.")
-        return False
+        return (False, "missing fields")
 
     id_hash = hash_uin(input_uin)
 
@@ -62,9 +61,8 @@ def process_entry(payload: dict) -> bool:
 
         # Deny voters not in the db
         if not row:
-            print(f"No record found for given UIN.")
             conn.close()
-            return False
+            return (False, "unregistered")
 
         print(f"Found record.")
 
@@ -83,22 +81,22 @@ def process_entry(payload: dict) -> bool:
             )
             conn.commit()
             conn.close()
-            return True
+            return (True, "eligible")
         else:
             print(f"Entry denied.")
             conn.close()
-            return False
+            return (False, "mismatch or has voted")
 
     except Exception as e:
         print(f"DB error: {e}")
-        return False
+        return (False, "error")
 
 
 # ---------------------------------------------------------------------------
 # Core logic - Exit
 # ---------------------------------------------------------------------------
 
-def process_exit(payload: dict) -> bool:
+def process_exit(payload: dict) -> tuple:
     """
     1. Hash the incoming UIN.
     2. Query the voters table for a matching id_hash.
@@ -110,8 +108,7 @@ def process_exit(payload: dict) -> bool:
     curr_precinct = payload.get("precinctID")
 
     if input_uin is None or curr_precinct is None:
-        print("Payload missing necessary fields.")
-        return False
+        return (False, "missing fields")
 
     id_hash = hash_uin(input_uin)
 
@@ -125,9 +122,8 @@ def process_exit(payload: dict) -> bool:
 
         # Deny voters not in the db
         if not row:
-            print(f"No record found for given UIN.")
             conn.close()
-            return False
+            return (False, "unregistered")
 
         print(f"Found record.")
 
@@ -148,12 +144,12 @@ def process_exit(payload: dict) -> bool:
             )
             conn.commit()
             conn.close()
-            return True
+            return (True, "eligible")
         else:
             print(f"Exit denied.")
             conn.close()
-            return False
+            return (False, "mismatch")
 
     except Exception as e:
         print(f"DB error: {e}")
-        return False
+        return (False, "error")

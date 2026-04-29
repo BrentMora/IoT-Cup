@@ -8,28 +8,26 @@ def enterRequest():
     payload = request.get_json()
 
     if not payload:
-        return jsonify({"success": False}), 400
+        return jsonify({"success": False, "status": "no data received"}), 400
 
     try:
         result = process_entry(payload)
-        return jsonify({"success": result})
+        return jsonify({"success": result[0], "status": result[1]})
     except Exception as e:
-        print(f"Unhandled error: {e}")
-        return jsonify({"success": False}), 500
+        return jsonify({"success": False, "status": "unhandled error"}), 500
 
 @app.route("/exitRequest", methods=["POST"])
 def exitRequest():
     payload = request.get_json()
 
     if not payload:
-        return jsonify({"success": False}), 400
+        return jsonify({"success": False, "status": "no data received"}), 400
 
     try:
         result = process_exit(payload)
-        return jsonify({"success": result})
+        return jsonify({"success": result[0], "status": result[1]})
     except Exception as e:
-        print(f"Unhandled error: {e}")
-        return jsonify({"success": False}), 500
+        return jsonify({"success": False, "status": "unhandled error"}), 500
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
