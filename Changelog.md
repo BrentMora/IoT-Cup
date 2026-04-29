@@ -51,4 +51,7 @@
 - query code now returns {"success": _, "status": _} only
 - MOSIP code now returns only authstatus > only changed last line (the return statement)
 - see **FULL SETUP** folder:
-    - GateAuth.py => fully merged MOSIP + DB Query setup => just returns {authstatus, status} for all cases
+    - fully merged MOSIP + DB Query setup (see MOSIP_Auth.py) => just returns {authstatus, status} for all cases
+    - everything compiled in one program
+- Problems:
+    - MOSIP timesout? not sure, but it does work
