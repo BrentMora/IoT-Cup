@@ -44,7 +44,7 @@ def process_entry(payload: dict) -> bool:
     5. Return True on success, False otherwise.
     """
     input_uin = payload.get("uin")
-    curr_precinct = payload.get("precinct_id")
+    curr_precinct = payload.get("precinctID")
 
     if input_uin is None or curr_precinct is None:
         print("Payload missing necessary fields.")
@@ -107,7 +107,7 @@ def process_exit(payload: dict) -> bool:
     5. Return True on success, False otherwise.
     """
     input_uin = payload.get("uin")
-    curr_precinct = payload.get("precinct_id")
+    curr_precinct = payload.get("precinctID")
 
     if input_uin is None or curr_precinct is None:
         print("Payload missing necessary fields.")

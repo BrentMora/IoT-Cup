@@ -45,3 +45,6 @@
 
 ### April 28:
 - Refactored to new final schema
+
+### April 29:
+- refactored to expect payload with "precinctID"

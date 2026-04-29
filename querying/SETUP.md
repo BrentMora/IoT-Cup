@@ -127,23 +127,23 @@ A full voter flow is: **entry → exit**.
 
 **Valid entry — expect `{"success": true}`**
 ```powershell
-Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "67", "precinct_id": "67"}'
+Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "67", "precinctID": "67"}'
 ```
 
 **Already voting or voted — expect `{"success": false}`**
 ```powershell
-Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "67", "precinct_id": "67"}'
+Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "67", "precinctID": "67"}'
 ```
 *(Run immediately after the valid entry above — uin 67 is now is_voting=TRUE)*
 
 **Wrong precinct — expect `{"success": false}`**
 ```powershell
-Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "68", "precinct_id": "99"}'
+Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "68", "precinctID": "99"}'
 ```
 
 **UIN not in DB — expect `{"success": false}`**
 ```powershell
-Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "999", "precinct_id": "67"}'
+Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "999", "precinctID": "67"}'
 ```
 
 **Missing field — expect `{"success": false}`**
@@ -157,22 +157,22 @@ Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentT
 
 *(First run a valid `/enterRequest` for uin 68 so it is in is_voting=TRUE state)*
 ```powershell
-Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "68", "precinct_id": "68"}'
+Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "68", "precinctID": "68"}'
 ```
 
 **Valid exit — expect `{"success": true}`**
 ```powershell
-Invoke-WebRequest -Uri http://localhost:5000/exitRequest -Method POST -ContentType "application/json" -Body '{"uin": "68", "precinct_id": "68"}'
+Invoke-WebRequest -Uri http://localhost:5000/exitRequest -Method POST -ContentType "application/json" -Body '{"uin": "68", "precinctID": "68"}'
 ```
 
 **Not currently voting (never entered) — expect `{"success": false}`**
 ```powershell
-Invoke-WebRequest -Uri http://localhost:5000/exitRequest -Method POST -ContentType "application/json" -Body '{"uin": "69", "precinct_id": "69"}'
+Invoke-WebRequest -Uri http://localhost:5000/exitRequest -Method POST -ContentType "application/json" -Body '{"uin": "69", "precinctID": "69"}'
 ```
 
 **Already voted — expect `{"success": false}`**
 ```powershell
-Invoke-WebRequest -Uri http://localhost:5000/exitRequest -Method POST -ContentType "application/json" -Body '{"uin": "68", "precinct_id": "68"}'
+Invoke-WebRequest -Uri http://localhost:5000/exitRequest -Method POST -ContentType "application/json" -Body '{"uin": "68", "precinctID": "68"}'
 ```
 *(Run immediately after the valid exit above — uin 68 is now has_voted=TRUE)*
 
@@ -186,14 +186,14 @@ Invoke-WebRequest -Uri http://localhost:5000/exitRequest -Method POST -ContentTy
 ```bash
 curl -X POST http://localhost:5000/enterRequest \
   -H "Content-Type: application/json" \
-  -d '{"uin": "67", "precinct_id": "67"}'
+  -d '{"uin": "67", "precinctID": "67"}'
 ```
 
 **Already voting or voted — expect `{"success": false}`**
 ```bash
 curl -X POST http://localhost:5000/enterRequest \
   -H "Content-Type: application/json" \
-  -d '{"uin": "67", "precinct_id": "67"}'
+  -d '{"uin": "67", "precinctID": "67"}'
 ```
 *(Run immediately after the valid entry above)*
 
@@ -201,14 +201,14 @@ curl -X POST http://localhost:5000/enterRequest \
 ```bash
 curl -X POST http://localhost:5000/enterRequest \
   -H "Content-Type: application/json" \
-  -d '{"uin": "68", "precinct_id": "99"}'
+  -d '{"uin": "68", "precinctID": "99"}'
 ```
 
 **UIN not in DB — expect `{"success": false}`**
 ```bash
 curl -X POST http://localhost:5000/enterRequest \
   -H "Content-Type: application/json" \
-  -d '{"uin": "999", "precinct_id": "67"}'
+  -d '{"uin": "999", "precinctID": "67"}'
 ```
 
 **Missing field — expect `{"success": false}`**
@@ -226,28 +226,28 @@ curl -X POST http://localhost:5000/enterRequest \
 ```bash
 curl -X POST http://localhost:5000/enterRequest \
   -H "Content-Type: application/json" \
-  -d '{"uin": "68", "precinct_id": "68"}'
+  -d '{"uin": "68", "precinctID": "68"}'
 ```
 
 **Valid exit — expect `{"success": true}`**
 ```bash
 curl -X POST http://localhost:5000/exitRequest \
   -H "Content-Type: application/json" \
-  -d '{"uin": "68", "precinct_id": "68"}'
+  -d '{"uin": "68", "precinctID": "68"}'
 ```
 
 **Not currently voting (never entered) — expect `{"success": false}`**
 ```bash
 curl -X POST http://localhost:5000/exitRequest \
   -H "Content-Type: application/json" \
-  -d '{"uin": "69", "precinct_id": "69"}'
+  -d '{"uin": "69", "precinctID": "69"}'
 ```
 
 **Already voted — expect `{"success": false}`**
 ```bash
 curl -X POST http://localhost:5000/exitRequest \
   -H "Content-Type: application/json" \
-  -d '{"uin": "68", "precinct_id": "68"}'
+  -d '{"uin": "68", "precinctID": "68"}'
 ```
 *(Run immediately after the valid exit above)*
 
