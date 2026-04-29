@@ -48,3 +48,4 @@
 
 ### April 29:
 - refactored to expect payload with "precinctID"
+- query code now returns {"success": _, "status": _} only
