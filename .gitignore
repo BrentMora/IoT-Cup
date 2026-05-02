@@ -10,7 +10,7 @@ venv.bak/
 .env*
 
 .DS_Store
-
+db.env
 # Logs
 *.log
 
@@ -20,3 +20,5 @@ venv.bak/
 
 # Certificates
 certs/
+
+local_test.db
