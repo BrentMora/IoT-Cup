@@ -68,10 +68,49 @@ All endpoints return:
 
 ---
 
-## 1. First-Time Setup
+## 1. Python Virtual Environment
+
+This project must run in its own isolated Python environment to avoid dependency conflicts with other projects.
+
+### Step 1 — Create the virtual environment
+Run this **once** in your project folder:
+```powershell
+python -m venv venv
+```
+This creates a `venv/` folder in your project directory.
+
+> Add `venv/` to your `.gitignore` — it should never be committed.
+
+### Step 2 — Activate the virtual environment
+
+You must activate the environment **every time** you open a new terminal before running any project commands.
+
+```powershell
+.\venv\Scripts\activate
+```
+
+Your prompt will change to show `(venv)` when it is active:
+```
+(venv) PS C:\Users\BrentJ\IoT-Cup>
+```
+
+To deactivate when you are done:
+```powershell
+deactivate
+```
+
+### Step 3 — Confirm you are in the right environment
+```powershell
+where python
+```
+It should point inside your project's `venv` folder, not your global Python install.
+
+---
+
+## 2. First-Time Setup
 
 ### Step 1 — Install dependencies
-Open a terminal in your project folder and run:
+With your virtual environment **activated**, run:
 ```powershell
 pip install -r requirements.txt
 ```
@@ -87,7 +126,7 @@ Get the connection string from: **Supabase → Project Settings → Database →
 
 ---
 
-## 2. Running the Server
+## 3. Running the Server
 
 ```powershell
 uvicorn GATE_Auth:app --host 0.0.0.0 --port 5000
@@ -102,7 +141,7 @@ INFO:     Uvicorn running on http://0.0.0.0:5000 (Press CTRL+C to quit)
 
 ---
 
-## 3. Resetting Test Data Between Tests
+## 4. Resetting Test Data Between Tests
 
 Since you're using the live Supabase database, reset voter states directly in the **Supabase SQL editor**:
 
@@ -120,7 +159,7 @@ Or reset a single voter by UIN hash.
 
 ---
 
-## 4. Testing the API
+## 5. Testing the API
 
 Open a **second** terminal window (keep the first one running the server).
 
@@ -330,7 +369,7 @@ curl -X POST http://localhost:5000/exitRequest \
 
 ---
 
-## 5. Handing Off to Your Teammate
+## 6. Handing Off to Your Teammate
 
 - **Start the server:** `uvicorn GATE_Auth:app --host 0.0.0.0 --port 5000`
 - **Endpoints:** `POST /enterRequest` and `POST /exitRequest`
@@ -347,5 +386,5 @@ curl -X POST http://localhost:5000/exitRequest \
 | Install dependencies        | `pip install -r requirements.txt`              |
 | Start the server            | `uvicorn GATE_Auth:app --host 0.0.0.0 --port 5000` |
 | Reset test data             | Run the UPDATE query in Supabase SQL editor    |
-| Test (PowerShell)           | `Invoke-WebRequest ...` (see Section 4)        |
-| Test (Mac/Linux/Git Bash)   | `curl -X POST ...` (see Section 4)             |
+| Test (PowerShell)           | `Invoke-WebRequest ...` (see Section 5)        |
+| Test (Mac/Linux/Git Bash)   | `curl -X POST ...` (see Section 5)             |
