@@ -90,7 +90,7 @@ Get the connection string from: **Supabase → Project Settings → Database →
 ## 2. Running the Server
 
 ```powershell
-python -m uvicorn GATE_Auth:app --host 0.0.0.0 --port 5000
+uvicorn GATE_Auth:app --host 0.0.0.0 --port 5000
 ```
 
 You should see:
@@ -142,32 +142,56 @@ A full voter flow is: **entry → exit**.
 ### On Windows (PowerShell)
 
 > Look for the **`Content`** line in the response output — that's your actual result.
+> 
+> PowerShell tip: assign the JSON to a `$body` variable first, then pass it to `Invoke-WebRequest`. This keeps long payloads readable.
 
 #### `/enterRequest`
 
 **Valid entry — expect `{"authStatus": true, "status": "eligible"}`**
 ```powershell
-Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "5408602380", "precinctID": "0001A"}'
+$body = '{"uin": "5408602380", "precinctID": "0001A", "name": "Yuki Nakashima", "dob": "1997/09/12", "location1": "Quezon City", "location3": "Metropolitan Manila Second District", "zone": "U.P. Campus", "postal_code": "11101", "address_line1": "UP AECH", "address_line2": "Velasquez St.", "address_line3": "UP Diliman"}'
+Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body $body
 ```
 
 **Already voting (run immediately after the one above) — expect `{"authStatus": false, "status": "mismatch or has voted"}`**
 ```powershell
-Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "5408602380", "precinctID": "0001A"}'
+Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body $body
 ```
 
-**Wrong precinct — expect `{"authStatus": false, "status": "mismatch or has voted"}`**
+**Wrong precinct (correct MOSIP data, wrong precinctID) — expect `{"authStatus": false, "status": "mismatch or has voted"}`**
 ```powershell
-Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "8541274095", "precinctID": "0001A"}'
+$body = '{"uin": "8541274095", "precinctID": "0001A", "name": "Aina Aiba", "dob": "1988/10/17", "location1": "Quezon City", "location3": "Metropolitan Manila Second District", "zone": "Central", "postal_code": "11100", "address_line1": "Circle of Fun", "address_line2": "Quezon Memorial Circle", "address_line3": "Elliptical Road"}'
+Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body $body
+```
+
+**MOSIP fail — wrong name and DOB — expect `{"authStatus": false, "status": "not in MOSIP"}`**
+```powershell
+$body = '{"uin": "8541274095", "precinctID": "0067C", "name": "Kanon Shizaki", "dob": "1997/09/12"}'
+Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body $body
+```
+
+**MOSIP fail — wrong address — expect `{"authStatus": false, "status": "not in MOSIP"}`**
+```powershell
+$body = '{"uin": "7903740631", "precinctID": "0001A", "name": "Yuki Nakashima", "dob": "1997/09/12", "location1": "Angeles City", "location3": "Pampanga", "zone": "Malabannas", "postal_code": "12023", "address_line1": "Cityfront Mall", "address_line2": "Manuel A Roxas Highway", "address_line3": "Clark"}'
+Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body $body
+```
+
+**MOSIP fail — wrong postal code — expect `{"authStatus": false, "status": "not in MOSIP"}`**
+```powershell
+$body = '{"uin": "8541274095", "precinctID": "0067C", "name": "Aina Aiba", "dob": "1988/10/17", "location1": "Quezon City", "location3": "Metropolitan Manila Second District", "zone": "Central", "postal_code": "12023", "address_line1": "Circle of Fun", "address_line2": "Quezon Memorial Circle", "address_line3": "Elliptical Road"}'
+Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body $body
 ```
 
 **UIN not in DB — expect `{"authStatus": false, "status": "unregistered"}`**
 ```powershell
-Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "0000000000", "precinctID": "0001A"}'
+$body = '{"uin": "0000000000", "precinctID": "0001A", "name": "Test User", "dob": "1990/01/01"}'
+Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body $body
 ```
 
-**Missing field — expect `{"authStatus": false, "status": "missing fields"}`**
+**Missing precinctID — expect `{"authStatus": false, "status": "missing fields"}`**
 ```powershell
-Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "7903740631"}'
+$body = '{"uin": "7903740631", "name": "Haruka Kudou", "dob": "1989/03/16"}'
+Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body $body
 ```
 
 ---
@@ -176,27 +200,31 @@ Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentT
 
 *(First run a valid `/enterRequest` for UIN 7903740631)*
 ```powershell
-Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "7903740631", "precinctID": "0001A"}'
+$body = '{"uin": "7903740631", "precinctID": "0001A", "name": "Haruka Kudou", "dob": "1989/03/16", "location1": "Quezon City", "location3": "Metropolitan Manila Second District", "zone": "U.P. Campus", "postal_code": "11101", "address_line1": "Melchor Hall", "address_line2": "Osmena Avenue", "address_line3": "UP Diliman"}'
+Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body $body
 ```
 
 **Valid exit — expect `{"authStatus": true, "status": "eligible"}`**
 ```powershell
-Invoke-WebRequest -Uri http://localhost:5000/exitRequest -Method POST -ContentType "application/json" -Body '{"uin": "7903740631", "precinctID": "0001A"}'
+Invoke-WebRequest -Uri http://localhost:5000/exitRequest -Method POST -ContentType "application/json" -Body $body
 ```
 
 **Not currently voting (never entered) — expect `{"authStatus": false, "status": "mismatch"}`**
 ```powershell
-Invoke-WebRequest -Uri http://localhost:5000/exitRequest -Method POST -ContentType "application/json" -Body '{"uin": "9406183480", "precinctID": "0002B"}'
+$body = '{"uin": "9406183480", "precinctID": "0002B", "name": "Megu Sakuragawa", "dob": "2022/10/24", "location1": "Angeles City", "location3": "Pampanga", "zone": "Malabannas", "postal_code": "12023", "address_line1": "SM Clark", "address_line2": "Manuel A Roxas Highway", "address_line3": "Clark"}'
+Invoke-WebRequest -Uri http://localhost:5000/exitRequest -Method POST -ContentType "application/json" -Body $body
 ```
 
 **Already voted (run immediately after valid exit above) — expect `{"authStatus": false, "status": "mismatch"}`**
 ```powershell
-Invoke-WebRequest -Uri http://localhost:5000/exitRequest -Method POST -ContentType "application/json" -Body '{"uin": "7903740631", "precinctID": "0001A"}'
+$body = '{"uin": "7903740631", "precinctID": "0001A", "name": "Haruka Kudou", "dob": "1989/03/16", "location1": "Quezon City", "location3": "Metropolitan Manila Second District", "zone": "U.P. Campus", "postal_code": "11101", "address_line1": "Melchor Hall", "address_line2": "Osmena Avenue", "address_line3": "UP Diliman"}'
+Invoke-WebRequest -Uri http://localhost:5000/exitRequest -Method POST -ContentType "application/json" -Body $body
 ```
 
-**Missing field — expect `{"authStatus": false, "status": "missing fields"}`**
+**Missing precinctID — expect `{"authStatus": false, "status": "missing fields"}`**
 ```powershell
-Invoke-WebRequest -Uri http://localhost:5000/exitRequest -Method POST -ContentType "application/json" -Body '{"uin": "7903740631"}'
+$body = '{"uin": "7903740631", "name": "Haruka Kudou", "dob": "1989/03/16"}'
+Invoke-WebRequest -Uri http://localhost:5000/exitRequest -Method POST -ContentType "application/json" -Body $body
 ```
 
 ---
@@ -209,35 +237,56 @@ Invoke-WebRequest -Uri http://localhost:5000/exitRequest -Method POST -ContentTy
 ```bash
 curl -X POST http://localhost:5000/enterRequest \
   -H "Content-Type: application/json" \
-  -d '{"uin": "5408602380", "precinctID": "0001A"}'
+  -d '{"uin": "5408602380", "precinctID": "0001A", "name": "Yuki Nakashima", "dob": "1997/09/12", "location1": "Quezon City", "location3": "Metropolitan Manila Second District", "zone": "U.P. Campus", "postal_code": "11101", "address_line1": "UP AECH", "address_line2": "Velasquez St.", "address_line3": "UP Diliman"}'
 ```
 
 **Already voting (run immediately after the one above) — expect `{"authStatus": false, "status": "mismatch or has voted"}`**
 ```bash
 curl -X POST http://localhost:5000/enterRequest \
   -H "Content-Type: application/json" \
-  -d '{"uin": "5408602380", "precinctID": "0001A"}'
+  -d '{"uin": "5408602380", "precinctID": "0001A", "name": "Yuki Nakashima", "dob": "1997/09/12", "location1": "Quezon City", "location3": "Metropolitan Manila Second District", "zone": "U.P. Campus", "postal_code": "11101", "address_line1": "UP AECH", "address_line2": "Velasquez St.", "address_line3": "UP Diliman"}'
 ```
 
-**Wrong precinct — expect `{"authStatus": false, "status": "mismatch or has voted"}`**
+**Wrong precinct (correct MOSIP data, wrong precinctID) — expect `{"authStatus": false, "status": "mismatch or has voted"}`**
 ```bash
 curl -X POST http://localhost:5000/enterRequest \
   -H "Content-Type: application/json" \
-  -d '{"uin": "8541274095", "precinctID": "0001A"}'
+  -d '{"uin": "8541274095", "precinctID": "0001A", "name": "Aina Aiba", "dob": "1988/10/17", "location1": "Quezon City", "location3": "Metropolitan Manila Second District", "zone": "Central", "postal_code": "11100", "address_line1": "Circle of Fun", "address_line2": "Quezon Memorial Circle", "address_line3": "Elliptical Road"}'
+```
+
+**MOSIP fail — wrong name and DOB — expect `{"authStatus": false, "status": "not in MOSIP"}`**
+```bash
+curl -X POST http://localhost:5000/enterRequest \
+  -H "Content-Type: application/json" \
+  -d '{"uin": "8541274095", "precinctID": "0067C", "name": "Kanon Shizaki", "dob": "1997/09/12"}'
+```
+
+**MOSIP fail — wrong address — expect `{"authStatus": false, "status": "not in MOSIP"}`**
+```bash
+curl -X POST http://localhost:5000/enterRequest \
+  -H "Content-Type: application/json" \
+  -d '{"uin": "7903740631", "precinctID": "0001A", "name": "Yuki Nakashima", "dob": "1997/09/12", "location1": "Angeles City", "location3": "Pampanga", "zone": "Malabannas", "postal_code": "12023", "address_line1": "Cityfront Mall", "address_line2": "Manuel A Roxas Highway", "address_line3": "Clark"}'
+```
+
+**MOSIP fail — wrong postal code — expect `{"authStatus": false, "status": "not in MOSIP"}`**
+```bash
+curl -X POST http://localhost:5000/enterRequest \
+  -H "Content-Type: application/json" \
+  -d '{"uin": "8541274095", "precinctID": "0067C", "name": "Aina Aiba", "dob": "1988/10/17", "location1": "Quezon City", "location3": "Metropolitan Manila Second District", "zone": "Central", "postal_code": "12023", "address_line1": "Circle of Fun", "address_line2": "Quezon Memorial Circle", "address_line3": "Elliptical Road"}'
 ```
 
 **UIN not in DB — expect `{"authStatus": false, "status": "unregistered"}`**
 ```bash
 curl -X POST http://localhost:5000/enterRequest \
   -H "Content-Type: application/json" \
-  -d '{"uin": "0000000000", "precinctID": "0001A"}'
+  -d '{"uin": "0000000000", "precinctID": "0001A", "name": "Test User", "dob": "1990/01/01"}'
 ```
 
-**Missing field — expect `{"authStatus": false, "status": "missing fields"}`**
+**Missing precinctID — expect `{"authStatus": false, "status": "missing fields"}`**
 ```bash
 curl -X POST http://localhost:5000/enterRequest \
   -H "Content-Type: application/json" \
-  -d '{"uin": "7903740631"}'
+  -d '{"uin": "7903740631", "name": "Haruka Kudou", "dob": "1989/03/16"}'
 ```
 
 ---
@@ -248,35 +297,35 @@ curl -X POST http://localhost:5000/enterRequest \
 ```bash
 curl -X POST http://localhost:5000/enterRequest \
   -H "Content-Type: application/json" \
-  -d '{"uin": "7903740631", "precinctID": "0001A"}'
+  -d '{"uin": "7903740631", "precinctID": "0001A", "name": "Haruka Kudou", "dob": "1989/03/16", "location1": "Quezon City", "location3": "Metropolitan Manila Second District", "zone": "U.P. Campus", "postal_code": "11101", "address_line1": "Melchor Hall", "address_line2": "Osmena Avenue", "address_line3": "UP Diliman"}'
 ```
 
 **Valid exit — expect `{"authStatus": true, "status": "eligible"}`**
 ```bash
 curl -X POST http://localhost:5000/exitRequest \
   -H "Content-Type: application/json" \
-  -d '{"uin": "7903740631", "precinctID": "0001A"}'
+  -d '{"uin": "7903740631", "precinctID": "0001A", "name": "Haruka Kudou", "dob": "1989/03/16", "location1": "Quezon City", "location3": "Metropolitan Manila Second District", "zone": "U.P. Campus", "postal_code": "11101", "address_line1": "Melchor Hall", "address_line2": "Osmena Avenue", "address_line3": "UP Diliman"}'
 ```
 
 **Not currently voting (never entered) — expect `{"authStatus": false, "status": "mismatch"}`**
 ```bash
 curl -X POST http://localhost:5000/exitRequest \
   -H "Content-Type: application/json" \
-  -d '{"uin": "9406183480", "precinctID": "0002B"}'
+  -d '{"uin": "9406183480", "precinctID": "0002B", "name": "Megu Sakuragawa", "dob": "2022/10/24", "location1": "Angeles City", "location3": "Pampanga", "zone": "Malabannas", "postal_code": "12023", "address_line1": "SM Clark", "address_line2": "Manuel A Roxas Highway", "address_line3": "Clark"}'
 ```
 
 **Already voted (run immediately after valid exit above) — expect `{"authStatus": false, "status": "mismatch"}`**
 ```bash
 curl -X POST http://localhost:5000/exitRequest \
   -H "Content-Type: application/json" \
-  -d '{"uin": "7903740631", "precinctID": "0001A"}'
+  -d '{"uin": "7903740631", "precinctID": "0001A", "name": "Haruka Kudou", "dob": "1989/03/16", "location1": "Quezon City", "location3": "Metropolitan Manila Second District", "zone": "U.P. Campus", "postal_code": "11101", "address_line1": "Melchor Hall", "address_line2": "Osmena Avenue", "address_line3": "UP Diliman"}'
 ```
 
-**Missing field — expect `{"authStatus": false, "status": "missing fields"}`**
+**Missing precinctID — expect `{"authStatus": false, "status": "missing fields"}`**
 ```bash
 curl -X POST http://localhost:5000/exitRequest \
   -H "Content-Type: application/json" \
-  -d '{"uin": "7903740631"}'
+  -d '{"uin": "7903740631", "name": "Haruka Kudou", "dob": "1989/03/16"}'
 ```
 
 ---
