@@ -124,7 +124,7 @@ Seeded UINs (for testing):
 ## 2. Running the Server
 
 ```bash
-uvicorn MOSIP_Auth:app --reload
+uvicorn GATE_Auth:app --reload
 ```
 
 You should see:

@@ -1,5 +1,5 @@
 from fastapi.testclient import TestClient
-from MOSIP_Auth import app
+from GATE_Auth import app
 
 import json
 
