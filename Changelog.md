@@ -55,3 +55,6 @@
     - everything compiled in one program
 - Problems:
     - MOSIP timesout? not sure, but it does work
+
+### May 2:
+- Wired to supabase

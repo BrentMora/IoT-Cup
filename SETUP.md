@@ -1,64 +1,20 @@
 # Setup & Testing Guide
-**Project:** IoT-Cup — MOSIP Auth + Voter Querying Service  
-**Language:** Python (FastAPI + SQLite for local testing)
+**Project:** IoT-Cup Querying Service  
+**Language:** Python (FastAPI + Supabase PostgreSQL)
 
 ---
 
 ## Project Structure
 
 ```
-project/
-├── MOSIP_Auth.py     # FastAPI server — MOSIP check, then DB check
-├── ID_Payload.py     # Pydantic request model (ScannedIDPayload)
+querying/
+├── GATE_Auth.py      # FastAPI server — handles incoming HTTP requests
 ├── database.py       # All database logic — hashing, query, and update
-├── init_db.py        # One-time script to create and seed the local test DB
-├── config.toml       # MOSIP SDK configuration
-└── requirements.txt  # Python dependencies
+├── ID_Payload.py     # Pydantic model for incoming request validation
+├── init_db.py        # Local testing only — creates a local SQLite DB
+├── requirements.txt  # Python dependencies
+└── db.env            # Database credentials (never commit this)
 ```
-
----
-
-## How the System Works
-
-Every request goes through **two layers**:
-
-```
-ESP32 → /enterRequest or /exitRequest
-           │
-           ▼
-    [1] MOSIP Auth
-        Is this UIN registered in MOSIP and do the demographics match?
-           │
-     ┌─────┴─────┐
-    NO           YES
-     │             │
-     ▼             ▼
-  Return        [2] DB Check
-  authStatus:   Is this voter eligible at this precinct?
-  false,            │
-  "not in       Return authStatus + status
-   MOSIP"
-```
-
----
-
-## Response Format
-
-All endpoints return:
-
-```json
-{ "authStatus": true/false, "status": "..." }
-```
-
-| `authStatus` | `status`                  | Meaning                                                      |
-|--------------|---------------------------|--------------------------------------------------------------|
-| `false`      | `"not in MOSIP"`          | MOSIP auth failed — wrong name, DOB, address, or UIN        |
-| `true`       | `"eligible"`              | Both checks passed — allow entry/exit                        |
-| `false`      | `"unregistered"`          | Not in the voter DB                                          |
-| `false`      | `"mismatch or has voted"` | Wrong precinct, already voting, or already voted (entry)     |
-| `false`      | `"mismatch"`              | Wrong precinct, not currently voting, or already voted (exit)|
-| `false`      | `"missing fields"`        | `uin` or `precinctID` missing from payload                   |
-| `false`      | `"error"`                 | Unexpected DB error                                          |
 
 ---
 
@@ -74,120 +30,112 @@ CREATE TABLE voters (
 );
 ```
 
-> Raw UINs are **never stored**. Incoming UINs are SHA-256 hashed in `database.py` before any DB query.
+> Raw UINs are **never stored**. Incoming UINs are hashed with SHA-256 in `database.py` before any DB query.
+
+---
+
+## How Hashing Works
+
+The payload sends a raw UIN. Before touching the database, `database.py` hashes it:
+
+```python
+import hashlib
+id_hash = hashlib.sha256(uin.encode()).hexdigest()
+```
+
+That hash is then used in all `SELECT` and `UPDATE` queries against `id_hash`.
+
+---
+
+## Response Format
+
+All endpoints return:
+```json
+{ "authStatus": <true|false>, "status": "<status string>" }
+```
+
+| status | authStatus | meaning |
+|---|---|---|
+| `"eligible"` | true | voter cleared, gate should open |
+| `"unregistered"` | false | UIN hash not found in DB |
+| `"mismatch or has voted"` | false | wrong precinct, already voting, or already voted (entry) |
+| `"mismatch"` | false | wrong precinct, not currently voting, or already voted (exit) |
+| `"missing fields"` | false | `uin` or `precinctID` not in payload |
+| `"not in MOSIP"` | false | MOSIP authentication failed |
+| `"error"` | false | unexpected DB error |
+| `"unhandled error"` | false | uncaught exception in the server |
+| `"no data received"` | false | empty or non-JSON request body |
 
 ---
 
 ## 1. First-Time Setup
 
-### Step 1 — Create and activate a virtual environment
-```bash
-python -m venv env
-
-# Windows
-.\env\Scripts\activate
-
-# Mac / Linux
-source env/bin/activate
+### Step 1 — Install dependencies
+Open a terminal in your project folder and run:
+```powershell
+pip install -r requirements.txt
 ```
 
-### Step 2 — Install dependencies
-```bash
-pip install fastapi uvicorn mosip-auth-sdk dynaconf pydantic
+### Step 2 — Configure database credentials
+Create a `db.env` file in your project root:
 ```
-
-### Step 3 — Configure MOSIP
-Make sure `config.toml` is present and correctly pointed at your MOSIP environment. The SDK reads it automatically on startup.
-
-### Step 4 — Create the local test database
-Run this **once**. It creates `local_test.db` with the `voters` table and 4 seeded rows.
-```bash
-python init_db.py
+DATABASE_URL=postgresql://postgres:[PASSWORD]@[HOST]:5432/postgres
 ```
+Get the connection string from: **Supabase → Project Settings → Database → Connection string → URI**
 
-You should see:
-```
-Seeded 4 sample rows.
-Database ready: local_test.db
-
-Seeded UINs (for testing):
-  Name                 UIN          precinct_id     id_hash
-  -------------------- ------------ --------------- ----------------------------------------------------------------
-  Yuki Nakashima       5408602380   1               <hash>
-  Haruka Kudou         7903740631   2               <hash>
-  Aina Aiba            8541274095   3               <hash>
-  Megu Sakuragawa      9406183480   4               <hash>
-```
+> Make sure `db.env` is in your `.gitignore` — never commit credentials.
 
 ---
 
 ## 2. Running the Server
 
-```bash
-uvicorn GATE_Auth:app --reload
+```powershell
+uvicorn GATE_Auth:app --host 0.0.0.0 --port 5000
 ```
 
 You should see:
 ```
-INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
-INFO:     Started reloader process
+INFO:     Uvicorn running on http://0.0.0.0:5000 (Press CTRL+C to quit)
 ```
 
-> Keep this terminal open while testing.  
-> The interactive API docs are available at **http://localhost:8000/docs**.
+> Keep this terminal open while testing.
 
 ---
 
-## 3. Resetting the Database Between Tests
+## 3. Resetting Test Data Between Tests
 
-After a full entry → exit flow, rows are marked `has_voted = TRUE`. Reset to start fresh:
-```bash
-python init_db.py --reset
+Since you're using the live Supabase database, reset voter states directly in the **Supabase SQL editor**:
+
+```sql
+UPDATE voters SET is_voting = FALSE, has_voted = FALSE
+WHERE uin IN (
+    'c8c5dd8ce3b91870275d53773838eabbbc081a84df3e2154d473fe5c64398e50',
+    'c7d7d0a81a210838f91a6e63f0f3273a064d020a26cbf5bb1b925a3da5cedaaa',
+    'b05b305b3bcfe15a69485f5f6c259efcb1df77fc1c841a44f87c278d910a5f36',
+    '98adb66a165abc7893ec33214f13d92968add9b9fa1a1fd81a522e5ed45a5f74'
+);
 ```
+
+Or reset a single voter by UIN hash.
 
 ---
 
-## 4. Test Data
+## 4. Testing the API
 
-### Voters in the DB
+Open a **second** terminal window (keep the first one running the server).
 
-| Name            | UIN        | precinct_id |
-|-----------------|------------|-------------|
-| Yuki Nakashima  | 5408602380 | 1           |
-| Haruka Kudou    | 7903740631 | 2           |
-| Aina Aiba       | 8541274095 | 3           |
-| Megu Sakuragawa | 9406183480 | 4           |
+The payload always sends the **raw UIN** — the server handles hashing internally.
 
-### Payloads that PASS MOSIP auth
+A full voter flow is: **entry → exit**.
 
-```json
-{"uin": "5408602380", "name": "Yuki Nakashima", "dob": "1997/09/12", "location1": "Quezon City", "location3": "Metropolitan Manila Second District", "zone": "U.P. Campus", "postal_code": "11101", "address_line1": "UP AECH", "address_line2": "Velasquez St.", "address_line3": "UP Diliman"}
-```
-```json
-{"uin": "7903740631", "name": "Haruka Kudou", "dob": "1989/03/16", "location1": "Quezon City", "location3": "Metropolitan Manila Second District", "zone": "U.P. Campus", "postal_code": "11101", "address_line1": "Melchor Hall", "address_line2": "Osmena Avenue", "address_line3": "UP Diliman"}
-```
-```json
-{"uin": "8541274095", "name": "Aina Aiba", "dob": "1988/10/17", "location1": "Quezon City", "location3": "Metropolitan Manila Second District", "zone": "Central", "postal_code": "11100", "address_line1": "Circle of Fun", "address_line2": "Quezon Memorial Circle", "address_line3": "Elliptical Road"}
-```
-```json
-{"uin": "9406183480", "name": "Megu Sakuragawa", "dob": "2022/10/24", "location1": "Angeles City", "location3": "Pampanga", "zone": "Malabanñas", "postal_code": "12023", "address_line1": "SM Clark", "address_line2": "Manuel A Roxas Highway", "address_line3": "Clark"}
-```
+### Test Data (Supabase)
 
-### Payloads that FAIL MOSIP auth
-
-| Why it fails | Payload |
-|---|---|
-| Wrong name + DOB for that UIN | `{"uin": "8541274095", "name": "Kanon Shizaki", "dob": "1997/09/12"}` |
-| Wrong address for that UIN | `{"uin": "7903740631", "name": "Yuki Nakashima", "dob": "1997/09/12", "location1": "Angeles City", "location3": "Pampanga", "zone": "Malabanñas", "postal_code": "12023", "address_line1": "Cityfront Mall", "address_line2": "Manuel A Roxas Highway", "address_line3": "Clark"}` |
-| Wrong postal code for that UIN | `{"uin": "8541274095", "name": "Aina Aiba", "dob": "1988/10/17", "location1": "Quezon City", "location3": "Metropolitan Manila Second District", "zone": "Central", "postal_code": "12023", "address_line1": "Circle of Fun", "address_line2": "Quezon Memorial Circle", "address_line3": "Elliptical Road"}` |
-
----
-
-## 5. Testing the API
-
-Open a **second** terminal (keep the first one running the server).
-
-A full voter flow is: **entry → exit**. Always run `python init_db.py --reset` between full test runs.
+| UIN | precinctID | id_hash |
+|-----|------------|---------|
+| 5408602380 | 0001A | `c8c5dd8ce3b91870275d53773838eabbbc081a84df3e2154d473fe5c64398e50` |
+| 7903740631 | 0001A | `c7d7d0a81a210838f91a6e63f0f3273a064d020a26cbf5bb1b925a3da5cedaaa` |
+| 8541274095 | 0067C | `b05b305b3bcfe15a69485f5f6c259efcb1df77fc1c841a44f87c278d910a5f36` |
+| 9406183480 | 0002B | `98adb66a165abc7893ec33214f13d92968add9b9fa1a1fd81a522e5ed45a5f74` |
 
 ---
 
@@ -195,221 +143,160 @@ A full voter flow is: **entry → exit**. Always run `python init_db.py --reset`
 
 > Look for the **`Content`** line in the response output — that's your actual result.
 
----
+#### `/enterRequest`
 
-#### Passing MOSIP → Valid DB entry — expect `{"authStatus": true, "status": "eligible"}`
+**Valid entry — expect `{"authStatus": true, "status": "eligible"}`**
 ```powershell
-Invoke-WebRequest -Uri http://localhost:8000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "5408602380", "name": "Yuki Nakashima", "dob": "1997/09/12", "location1": "Quezon City", "location3": "Metropolitan Manila Second District", "zone": "U.P. Campus", "postal_code": "11101", "address_line1": "UP AECH", "address_line2": "Velasquez St.", "address_line3": "UP Diliman", "precinctID": "1"}'
+Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "5408602380", "precinctID": "0001A"}'
 ```
 
-#### Passing MOSIP → Already voting (run same request again) — expect `{"authStatus": false, "status": "mismatch or has voted"}`
+**Already voting (run immediately after the one above) — expect `{"authStatus": false, "status": "mismatch or has voted"}`**
 ```powershell
-Invoke-WebRequest -Uri http://localhost:8000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "5408602380", "name": "Yuki Nakashima", "dob": "1997/09/12", "location1": "Quezon City", "location3": "Metropolitan Manila Second District", "zone": "U.P. Campus", "postal_code": "11101", "address_line1": "UP AECH", "address_line2": "Velasquez St.", "address_line3": "UP Diliman", "precinctID": "1"}'
+Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "5408602380", "precinctID": "0001A"}'
 ```
 
-#### Passing MOSIP → Wrong precinct — expect `{"authStatus": false, "status": "mismatch or has voted"}`
+**Wrong precinct — expect `{"authStatus": false, "status": "mismatch or has voted"}`**
 ```powershell
-Invoke-WebRequest -Uri http://localhost:8000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "7903740631", "name": "Haruka Kudou", "dob": "1989/03/16", "location1": "Quezon City", "location3": "Metropolitan Manila Second District", "zone": "U.P. Campus", "postal_code": "11101", "address_line1": "Melchor Hall", "address_line2": "Osmena Avenue", "address_line3": "UP Diliman", "precinctID": "99"}'
+Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "8541274095", "precinctID": "0001A"}'
 ```
 
-#### Passing MOSIP → UIN not in DB — expect `{"authStatus": false, "status": "unregistered"}`
-
-*(This UIN passes MOSIP but was never seeded into the local DB)*
+**UIN not in DB — expect `{"authStatus": false, "status": "unregistered"}`**
 ```powershell
-Invoke-WebRequest -Uri http://localhost:8000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "9406183480", "name": "Megu Sakuragawa", "dob": "2022/10/24", "location1": "Angeles City", "location3": "Pampanga", "zone": "Malabannas", "postal_code": "12023", "address_line1": "SM Clark", "address_line2": "Manuel A Roxas Highway", "address_line3": "Clark", "precinctID": "99"}'
+Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "0000000000", "precinctID": "0001A"}'
 ```
 
-#### Failing MOSIP — wrong name/DOB — expect `{"authStatus": false, "status": "not in MOSIP"}`
+**Missing field — expect `{"authStatus": false, "status": "missing fields"}`**
 ```powershell
-Invoke-WebRequest -Uri http://localhost:8000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "8541274095", "name": "Kanon Shizaki", "dob": "1997/09/12", "precinctID": "3"}'
-```
-
-#### Failing MOSIP — wrong address — expect `{"authStatus": false, "status": "not in MOSIP"}`
-```powershell
-Invoke-WebRequest -Uri http://localhost:8000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "7903740631", "name": "Yuki Nakashima", "dob": "1997/09/12", "location1": "Angeles City", "location3": "Pampanga", "zone": "Malabannas", "postal_code": "12023", "address_line1": "Cityfront Mall", "address_line2": "Manuel A Roxas Highway", "address_line3": "Clark", "precinctID": "2"}'
-```
-
-#### Failing MOSIP — wrong postal code — expect `{"authStatus": false, "status": "not in MOSIP"}`
-```powershell
-Invoke-WebRequest -Uri http://localhost:8000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "8541274095", "name": "Aina Aiba", "dob": "1988/10/17", "location1": "Quezon City", "location3": "Metropolitan Manila Second District", "zone": "Central", "postal_code": "12023", "address_line1": "Circle of Fun", "address_line2": "Quezon Memorial Circle", "address_line3": "Elliptical Road", "precinctID": "3"}'
+Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "7903740631"}'
 ```
 
 ---
 
-#### `/exitRequest` flow
+#### `/exitRequest`
 
-*(First, run a valid `/enterRequest` for Haruka Kudou)*
+*(First run a valid `/enterRequest` for UIN 7903740631)*
 ```powershell
-Invoke-WebRequest -Uri http://localhost:8000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "7903740631", "name": "Haruka Kudou", "dob": "1989/03/16", "location1": "Quezon City", "location3": "Metropolitan Manila Second District", "zone": "U.P. Campus", "postal_code": "11101", "address_line1": "Melchor Hall", "address_line2": "Osmena Avenue", "address_line3": "UP Diliman", "precinctID": "2"}'
+Invoke-WebRequest -Uri http://localhost:5000/enterRequest -Method POST -ContentType "application/json" -Body '{"uin": "7903740631", "precinctID": "0001A"}'
 ```
 
 **Valid exit — expect `{"authStatus": true, "status": "eligible"}`**
 ```powershell
-Invoke-WebRequest -Uri http://localhost:8000/exitRequest -Method POST -ContentType "application/json" -Body '{"uin": "7903740631", "name": "Haruka Kudou", "dob": "1989/03/16", "location1": "Quezon City", "location3": "Metropolitan Manila Second District", "zone": "U.P. Campus", "postal_code": "11101", "address_line1": "Melchor Hall", "address_line2": "Osmena Avenue", "address_line3": "UP Diliman", "precinctID": "2"}'
+Invoke-WebRequest -Uri http://localhost:5000/exitRequest -Method POST -ContentType "application/json" -Body '{"uin": "7903740631", "precinctID": "0001A"}'
 ```
 
 **Not currently voting (never entered) — expect `{"authStatus": false, "status": "mismatch"}`**
 ```powershell
-Invoke-WebRequest -Uri http://localhost:8000/exitRequest -Method POST -ContentType "application/json" -Body '{"uin": "8541274095", "name": "Aina Aiba", "dob": "1988/10/17", "location1": "Quezon City", "location3": "Metropolitan Manila Second District", "zone": "Central", "postal_code": "11100", "address_line1": "Circle of Fun", "address_line2": "Quezon Memorial Circle", "address_line3": "Elliptical Road", "precinctID": "3"}'
+Invoke-WebRequest -Uri http://localhost:5000/exitRequest -Method POST -ContentType "application/json" -Body '{"uin": "9406183480", "precinctID": "0002B"}'
 ```
 
-**Already voted (run exit for Haruka again) — expect `{"authStatus": false, "status": "mismatch"}`**
+**Already voted (run immediately after valid exit above) — expect `{"authStatus": false, "status": "mismatch"}`**
 ```powershell
-Invoke-WebRequest -Uri http://localhost:8000/exitRequest -Method POST -ContentType "application/json" -Body '{"uin": "7903740631", "name": "Haruka Kudou", "dob": "1989/03/16", "location1": "Quezon City", "location3": "Metropolitan Manila Second District", "zone": "U.P. Campus", "postal_code": "11101", "address_line1": "Melchor Hall", "address_line2": "Osmena Avenue", "address_line3": "UP Diliman", "precinctID": "2"}'
+Invoke-WebRequest -Uri http://localhost:5000/exitRequest -Method POST -ContentType "application/json" -Body '{"uin": "7903740631", "precinctID": "0001A"}'
+```
+
+**Missing field — expect `{"authStatus": false, "status": "missing fields"}`**
+```powershell
+Invoke-WebRequest -Uri http://localhost:5000/exitRequest -Method POST -ContentType "application/json" -Body '{"uin": "7903740631"}'
 ```
 
 ---
 
 ### On Mac / Linux / Git Bash
 
-#### Passing MOSIP → Valid DB entry — expect `{"authStatus": true, "status": "eligible"}`
+#### `/enterRequest`
+
+**Valid entry — expect `{"authStatus": true, "status": "eligible"}`**
 ```bash
-curl -X POST http://localhost:8000/enterRequest \
+curl -X POST http://localhost:5000/enterRequest \
   -H "Content-Type: application/json" \
-  -d '{"uin": "5408602380", "name": "Yuki Nakashima", "dob": "1997/09/12", "location1": "Quezon City", "location3": "Metropolitan Manila Second District", "zone": "U.P. Campus", "postal_code": "11101", "address_line1": "UP AECH", "address_line2": "Velasquez St.", "address_line3": "UP Diliman", "precinctID": "1"}'
+  -d '{"uin": "5408602380", "precinctID": "0001A"}'
 ```
 
-#### Passing MOSIP → Already voting (run same request again) — expect `{"authStatus": false, "status": "mismatch or has voted"}`
+**Already voting (run immediately after the one above) — expect `{"authStatus": false, "status": "mismatch or has voted"}`**
 ```bash
-curl -X POST http://localhost:8000/enterRequest \
+curl -X POST http://localhost:5000/enterRequest \
   -H "Content-Type: application/json" \
-  -d '{"uin": "5408602380", "name": "Yuki Nakashima", "dob": "1997/09/12", "location1": "Quezon City", "location3": "Metropolitan Manila Second District", "zone": "U.P. Campus", "postal_code": "11101", "address_line1": "UP AECH", "address_line2": "Velasquez St.", "address_line3": "UP Diliman", "precinctID": "1"}'
+  -d '{"uin": "5408602380", "precinctID": "0001A"}'
 ```
 
-#### Passing MOSIP → Wrong precinct — expect `{"authStatus": false, "status": "mismatch or has voted"}`
+**Wrong precinct — expect `{"authStatus": false, "status": "mismatch or has voted"}`**
 ```bash
-curl -X POST http://localhost:8000/enterRequest \
+curl -X POST http://localhost:5000/enterRequest \
   -H "Content-Type: application/json" \
-  -d '{"uin": "7903740631", "name": "Haruka Kudou", "dob": "1989/03/16", "location1": "Quezon City", "location3": "Metropolitan Manila Second District", "zone": "U.P. Campus", "postal_code": "11101", "address_line1": "Melchor Hall", "address_line2": "Osmena Avenue", "address_line3": "UP Diliman", "precinctID": "99"}'
+  -d '{"uin": "8541274095", "precinctID": "0001A"}'
 ```
 
-#### Passing MOSIP → UIN not in DB — expect `{"authStatus": false, "status": "unregistered"}`
+**UIN not in DB — expect `{"authStatus": false, "status": "unregistered"}`**
 ```bash
-curl -X POST http://localhost:8000/enterRequest \
+curl -X POST http://localhost:5000/enterRequest \
   -H "Content-Type: application/json" \
-  -d '{"uin": "9406183480", "name": "Megu Sakuragawa", "dob": "2022/10/24", "location1": "Angeles City", "location3": "Pampanga", "zone": "Malabannas", "postal_code": "12023", "address_line1": "SM Clark", "address_line2": "Manuel A Roxas Highway", "address_line3": "Clark", "precinctID": "99"}'
+  -d '{"uin": "0000000000", "precinctID": "0001A"}'
 ```
 
-#### Failing MOSIP — wrong name/DOB — expect `{"authStatus": false, "status": "not in MOSIP"}`
+**Missing field — expect `{"authStatus": false, "status": "missing fields"}`**
 ```bash
-curl -X POST http://localhost:8000/enterRequest \
+curl -X POST http://localhost:5000/enterRequest \
   -H "Content-Type: application/json" \
-  -d '{"uin": "8541274095", "name": "Kanon Shizaki", "dob": "1997/09/12", "precinctID": "3"}'
-```
-
-#### Failing MOSIP — wrong address — expect `{"authStatus": false, "status": "not in MOSIP"}`
-```bash
-curl -X POST http://localhost:8000/enterRequest \
-  -H "Content-Type: application/json" \
-  -d '{"uin": "7903740631", "name": "Yuki Nakashima", "dob": "1997/09/12", "location1": "Angeles City", "location3": "Pampanga", "zone": "Malabannas", "postal_code": "12023", "address_line1": "Cityfront Mall", "address_line2": "Manuel A Roxas Highway", "address_line3": "Clark", "precinctID": "2"}'
-```
-
-#### Failing MOSIP — wrong postal code — expect `{"authStatus": false, "status": "not in MOSIP"}`
-```bash
-curl -X POST http://localhost:8000/enterRequest \
-  -H "Content-Type: application/json" \
-  -d '{"uin": "8541274095", "name": "Aina Aiba", "dob": "1988/10/17", "location1": "Quezon City", "location3": "Metropolitan Manila Second District", "zone": "Central", "postal_code": "12023", "address_line1": "Circle of Fun", "address_line2": "Quezon Memorial Circle", "address_line3": "Elliptical Road", "precinctID": "3"}'
+  -d '{"uin": "7903740631"}'
 ```
 
 ---
 
-#### `/exitRequest` flow
+#### `/exitRequest`
 
-*(First, run a valid `/enterRequest` for Haruka Kudou)*
+*(First run a valid `/enterRequest` for UIN 7903740631)*
 ```bash
-curl -X POST http://localhost:8000/enterRequest \
+curl -X POST http://localhost:5000/enterRequest \
   -H "Content-Type: application/json" \
-  -d '{"uin": "7903740631", "name": "Haruka Kudou", "dob": "1989/03/16", "location1": "Quezon City", "location3": "Metropolitan Manila Second District", "zone": "U.P. Campus", "postal_code": "11101", "address_line1": "Melchor Hall", "address_line2": "Osmena Avenue", "address_line3": "UP Diliman", "precinctID": "2"}'
+  -d '{"uin": "7903740631", "precinctID": "0001A"}'
 ```
 
 **Valid exit — expect `{"authStatus": true, "status": "eligible"}`**
 ```bash
-curl -X POST http://localhost:8000/exitRequest \
+curl -X POST http://localhost:5000/exitRequest \
   -H "Content-Type: application/json" \
-  -d '{"uin": "7903740631", "name": "Haruka Kudou", "dob": "1989/03/16", "location1": "Quezon City", "location3": "Metropolitan Manila Second District", "zone": "U.P. Campus", "postal_code": "11101", "address_line1": "Melchor Hall", "address_line2": "Osmena Avenue", "address_line3": "UP Diliman", "precinctID": "2"}'
+  -d '{"uin": "7903740631", "precinctID": "0001A"}'
 ```
 
 **Not currently voting (never entered) — expect `{"authStatus": false, "status": "mismatch"}`**
 ```bash
-curl -X POST http://localhost:8000/exitRequest \
+curl -X POST http://localhost:5000/exitRequest \
   -H "Content-Type: application/json" \
-  -d '{"uin": "8541274095", "name": "Aina Aiba", "dob": "1988/10/17", "location1": "Quezon City", "location3": "Metropolitan Manila Second District", "zone": "Central", "postal_code": "11100", "address_line1": "Circle of Fun", "address_line2": "Quezon Memorial Circle", "address_line3": "Elliptical Road", "precinctID": "3"}'
+  -d '{"uin": "9406183480", "precinctID": "0002B"}'
 ```
 
-**Already voted (run exit for Haruka again) — expect `{"authStatus": false, "status": "mismatch"}`**
+**Already voted (run immediately after valid exit above) — expect `{"authStatus": false, "status": "mismatch"}`**
 ```bash
-curl -X POST http://localhost:8000/exitRequest \
+curl -X POST http://localhost:5000/exitRequest \
   -H "Content-Type: application/json" \
-  -d '{"uin": "7903740631", "name": "Haruka Kudou", "dob": "1989/03/16", "location1": "Quezon City", "location3": "Metropolitan Manila Second District", "zone": "U.P. Campus", "postal_code": "11101", "address_line1": "Melchor Hall", "address_line2": "Osmena Avenue", "address_line3": "UP Diliman", "precinctID": "2"}'
+  -d '{"uin": "7903740631", "precinctID": "0001A"}'
+```
+
+**Missing field — expect `{"authStatus": false, "status": "missing fields"}`**
+```bash
+curl -X POST http://localhost:5000/exitRequest \
+  -H "Content-Type: application/json" \
+  -d '{"uin": "7903740631"}'
 ```
 
 ---
 
-## 6. Switching to the Real Database (Supabase / PostgreSQL)
+## 5. Handing Off to Your Teammate
 
-### Step 1 — Install the PostgreSQL driver
-```bash
-pip install psycopg2-binary
-```
-
-### Step 2 — Update `get_connection()` in `database.py`
-```python
-import psycopg2
-
-def get_connection():
-    return psycopg2.connect(os.getenv("DATABASE_URL"))
-```
-
-### Step 3 — Update placeholder syntax in `database.py`
-
-SQLite uses `?`, PostgreSQL uses `%s`. Update all queries in `process_entry` and `process_exit`:
-
-```python
-cursor.execute("SELECT * FROM voters WHERE id_hash = %s", (id_hash,))
-
-cursor.execute(
-    "UPDATE voters SET is_voting = %s, updated_at = CURRENT_TIMESTAMP WHERE id_hash = %s",
-    (True, id_hash)
-)
-
-cursor.execute(
-    "UPDATE voters SET has_voted = %s, is_voting = %s, updated_at = CURRENT_TIMESTAMP WHERE id_hash = %s",
-    (True, False, id_hash)
-)
-```
-
-### Step 4 — Set the environment variable
-```bash
-export DATABASE_URL=postgresql://postgres:[PASSWORD]@[HOST]:5432/postgres
-```
-
-### Step 5 — Create the table in Supabase
-
-Run this in the **Supabase SQL editor**:
-```sql
-CREATE TABLE voters (
-    id_hash     CHAR(64)    PRIMARY KEY,
-    precinct_id VARCHAR(20) NOT NULL,
-    is_voting   BOOLEAN     DEFAULT FALSE,
-    has_voted   BOOLEAN     DEFAULT FALSE,
-    updated_at  TIMESTAMP   DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-> `init_db.py` is for local testing only — your teammate handles the real DB setup.
+- **Start the server:** `uvicorn GATE_Auth:app --host 0.0.0.0 --port 5000`
+- **Endpoints:** `POST /enterRequest` and `POST /exitRequest`
+- **Request format:** JSON body with `uin` (string) and `precinctID` (string)
+- **Response format:** `{"authStatus": true/false, "status": "<status string>"}`
+- **Required env variable:** `DATABASE_URL` must be set in `db.env` on the server
 
 ---
 
 ## Quick Reference
 
-| Task                        | Command                                                           |
-|-----------------------------|-------------------------------------------------------------------|
-| Activate virtual env (Win)  | `.\env\Scripts\activate`                                          |
-| Activate virtual env (Mac)  | `source env/bin/activate`                                         |
-| Install dependencies        | `pip install fastapi uvicorn mosip-auth-sdk dynaconf pydantic`    |
-| Initialize local test DB    | `python init_db.py`                                               |
-| Reset DB between tests      | `python init_db.py --reset`                                       |
-| Start the server            | `uvicorn MOSIP_Auth:app --reload`                                 |
-| View interactive API docs   | `http://localhost:8000/docs`                                      |
-| Test (PowerShell)           | `Invoke-WebRequest ...` (see Section 5)                           |
-| Test (Mac/Linux/Git Bash)   | `curl -X POST ...` (see Section 5)                                |
+| Task                        | Command                                        |
+|-----------------------------|------------------------------------------------|
+| Install dependencies        | `pip install -r requirements.txt`              |
+| Start the server            | `uvicorn GATE_Auth:app --host 0.0.0.0 --port 5000` |
+| Reset test data             | Run the UPDATE query in Supabase SQL editor    |
+| Test (PowerShell)           | `Invoke-WebRequest ...` (see Section 4)        |
+| Test (Mac/Linux/Git Bash)   | `curl -X POST ...` (see Section 4)             |
