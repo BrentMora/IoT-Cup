@@ -90,7 +90,7 @@ Get the connection string from: **Supabase → Project Settings → Database →
 ## 2. Running the Server
 
 ```powershell
-uvicorn GATE_Auth:app --host 0.0.0.0 --port 5000
+python -m uvicorn GATE_Auth:app --host 0.0.0.0 --port 5000
 ```
 
 You should see:
