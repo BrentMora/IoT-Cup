@@ -43,7 +43,7 @@ def process_entry(payload: dict) -> tuple:
     1. Hash the incoming UIN.
     2. Query the voters table for a matching id_hash.
     3. If found, not yet voting, not yet voted, and precinct matches — allow entry.
-    4. Set is_voting to TRUE and update updated_at.
+    4. Set is_voting to TRUE and update time_updated.
     5. Return (True, "eligible") on success, (False, <reason>) otherwise.
     """
     input_uin = payload.get("uin")
@@ -73,13 +73,13 @@ def process_entry(payload: dict) -> tuple:
         #
         # [Gate Entry]
         # If not voted and not voting and they are at the right precinct, let them enter.
-        # Set is_voting to TRUE and update updated_at.
+        # Set is_voting to TRUE and update time_updated.
 
         if (row["is_voting"] == False
                 and row["has_voted"] == False
                 and str(curr_precinct) == str(row["precinct_id"])):
             cursor.execute(
-                "UPDATE voters SET is_voting = %s, updated_at = CURRENT_TIMESTAMP WHERE id_hash = %s",
+                "UPDATE voters SET is_voting = %s, time_updated = CURRENT_TIMESTAMP WHERE id_hash = %s",
                 (True, id_hash)
             )
             conn.commit()
@@ -104,7 +104,7 @@ def process_exit(payload: dict) -> tuple:
     1. Hash the incoming UIN.
     2. Query the voters table for a matching id_hash.
     3. If found, currently voting, not yet voted, and precinct matches — allow exit.
-    4. Set has_voted to TRUE, is_voting to FALSE, and update updated_at.
+    4. Set has_voted to TRUE, is_voting to FALSE, and update time_updated.
     5. Return (True, "eligible") on success, (False, <reason>) otherwise.
     """
     input_uin = payload.get("uin")
@@ -134,14 +134,14 @@ def process_exit(payload: dict) -> tuple:
         #
         # [Gate Exit]
         # If currently voting and not yet voted and precinct matches — allow exit.
-        # Set has_voted to TRUE, is_voting to FALSE, and update updated_at.
+        # Set has_voted to TRUE, is_voting to FALSE, and update time_updated.
 
         if (row["is_voting"] == True
                 and row["has_voted"] == False
                 and str(curr_precinct) == str(row["precinct_id"])):
             cursor.execute(
                 """UPDATE voters
-                   SET has_voted = %s, is_voting = %s, updated_at = CURRENT_TIMESTAMP
+                   SET has_voted = %s, is_voting = %s, time_updated = CURRENT_TIMESTAMP
                    WHERE id_hash = %s""",
                 (True, False, id_hash)
             )
@@ -152,6 +152,35 @@ def process_exit(payload: dict) -> tuple:
             print(f"Exit denied.")
             conn.close()
             return (False, "mismatch")
+
+    except Exception as e:
+        print(f"DB error: {e}")
+        return (False, "error")
+    
+
+# ---------------------------------------------------------------------------
+# Core logic - Exit
+# ---------------------------------------------------------------------------
+
+
+def process_reset() -> tuple:
+    """
+    Reset all voter states
+    """
+
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """UPDATE voters
+                SET has_voted = %s, is_voting = %s, time_updated = CURRENT_TIMESTAMP""",
+            (False, False)
+        )
+        conn.commit()
+        conn.close()
+        return (True, "All voter states reset")
+
 
     except Exception as e:
         print(f"DB error: {e}")

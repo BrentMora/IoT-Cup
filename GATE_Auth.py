@@ -4,7 +4,7 @@ from mosip_auth_sdk import MOSIPAuthenticator
 from dynaconf import Dynaconf
 
 from ID_Payload import ScannedIDPayload
-from database import process_entry, process_exit 
+from database import process_entry, process_exit, process_reset 
 
 # [1] Config
 config = Dynaconf(settings_files=["./config.toml"], environments=False)
@@ -62,4 +62,10 @@ async def exit_request(payload: ScannedIDPayload):
 
     db_payload = {"uin": payload.uin, "precinctID": payload.precinctID}
     success, status = process_exit(db_payload)
+    return {"authStatus": success, "status": status}
+
+
+@app.post("/resetState")
+async def reset_state():
+    success, status = process_reset()
     return {"authStatus": success, "status": status}
