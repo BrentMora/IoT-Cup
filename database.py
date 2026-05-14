@@ -65,9 +65,11 @@ def process_entry(payload: dict) -> tuple:
         # Deny voters not in the db
         if not row:
             conn.close()
+            print("Entity not in database.")
+            print("Entry Denied.")
             return (False, "unregistered")
 
-        print(f"Found record.")
+        print(f"Found record in database.")
 
         # --- Step 2: Update [for gate entry] ---
         #
@@ -84,6 +86,7 @@ def process_entry(payload: dict) -> tuple:
             )
             conn.commit()
             conn.close()
+            print("Entry approved.")
             return (True, "eligible")
         else:
             print(f"Entry denied.")
@@ -125,6 +128,8 @@ def process_exit(payload: dict) -> tuple:
 
         # Deny voters not in the db
         if not row:
+            print("Entity not in database.")
+            print("Entry Denied.")
             conn.close()
             return (False, "unregistered")
 
@@ -147,6 +152,7 @@ def process_exit(payload: dict) -> tuple:
             )
             conn.commit()
             conn.close()
+            print("Exit approved.")
             return (True, "eligible")
         else:
             print(f"Exit denied.")
@@ -179,6 +185,7 @@ def process_reset() -> tuple:
         )
         conn.commit()
         conn.close()
+        print("All voter states reset")
         return (True, "All voter states reset")
 
 
