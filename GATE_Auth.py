@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 from mosip_auth_sdk.models import DemographicsModel
 from mosip_auth_sdk import MOSIPAuthenticator
 from dynaconf import Dynaconf
+import time
 
 from ID_Payload import ScannedIDPayload
 from database import process_entry, process_exit, process_reset 
@@ -31,16 +32,34 @@ def run_mosip_auth(payload: ScannedIDPayload) -> bool:
         address_line3=wrap(payload.address_line3),
     )
 
-    try:
-        response = authenticator.auth(
-            individual_id=payload.uin,
-            individual_id_type="UIN",
-            demographic_data=demographics_data,
-            consent=True,
-        )
-        return response.json().get("response", {}).get("authStatus", False)
-    except Exception:
+    # try:
+    #     response = authenticator.auth(
+    #         individual_id=payload.uin,
+    #         individual_id_type="UIN",
+    #         demographic_data=demographics_data,
+    #         consent=True,
+    #     )
+    #     return response.json().get("response", {}).get("authStatus", False)
+    # except Exception:
+    #     raise HTTPException(status_code=503, detail="Identity service unavailable")
+
+    is_error = False
+    for x in range(3):
+        try:
+            response = authenticator.auth(
+                individual_id=payload.uin,
+                individual_id_type="UIN",
+                demographic_data=demographics_data,
+                consent=True,
+            )
+            return response.json().get("response", {}).get("authStatus", False)
+        except Exception:
+            print("Identity service unavailable")
+            is_error = True
+            time.sleep(3)
+    if is_error:
         raise HTTPException(status_code=503, detail="Identity service unavailable")
+    raise HTTPException(status_code=500, detail="Did not return or raise error code 503")
 
 
 # [4] Entry endpoint
