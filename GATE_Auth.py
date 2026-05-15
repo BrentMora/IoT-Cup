@@ -69,8 +69,7 @@ def run_mosip_auth(payload: ScannedIDPayload) -> bool:
 # [4] Entry endpoint
 @app.post("/enterRequest")
 async def enter_request(payload: ScannedIDPayload):
-    print("QR Payload:")
-    pprint(payload)
+    print("QR Payload:", payload)
     if not run_mosip_auth(payload):
         return {"authStatus": False, "status": "not in MOSIP"}
 
@@ -82,7 +81,7 @@ async def enter_request(payload: ScannedIDPayload):
 # [5] Exit endpoint
 @app.post("/exitRequest")
 async def exit_request(payload: ScannedIDPayload):
-    print(payload)
+    print("QR Payload:", payload)
     if not run_mosip_auth(payload):
         return {"authStatus": False, "status": "not in MOSIP"}
 
