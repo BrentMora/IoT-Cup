@@ -52,7 +52,9 @@ def run_mosip_auth(payload: ScannedIDPayload) -> bool:
                 demographic_data=demographics_data,
                 consent=True,
             )
-            return response.json().get("response", {}).get("authStatus", False)
+            data = response.json()
+            print(data)
+            return data.get("response", {}).get("authStatus", False)
         except Exception:
             print("Identity service unavailable")
             is_error = True
@@ -65,6 +67,7 @@ def run_mosip_auth(payload: ScannedIDPayload) -> bool:
 # [4] Entry endpoint
 @app.post("/enterRequest")
 async def enter_request(payload: ScannedIDPayload):
+    print(payload)
     if not run_mosip_auth(payload):
         return {"authStatus": False, "status": "not in MOSIP"}
 
@@ -76,6 +79,7 @@ async def enter_request(payload: ScannedIDPayload):
 # [5] Exit endpoint
 @app.post("/exitRequest")
 async def exit_request(payload: ScannedIDPayload):
+    print(payload)
     if not run_mosip_auth(payload):
         return {"authStatus": False, "status": "not in MOSIP"}
 

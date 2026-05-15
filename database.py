@@ -133,7 +133,7 @@ def process_exit(payload: dict) -> tuple:
             conn.close()
             return (False, "unregistered")
 
-        print(f"Found record.")
+        print(f"Found record in database.")
 
         # --- Step 2: Update [for gate exit] ---
         #
