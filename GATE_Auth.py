@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 from mosip_auth_sdk.models import DemographicsModel
 from mosip_auth_sdk import MOSIPAuthenticator
 from dynaconf import Dynaconf
+from pprint import pprint
 import time
 
 from ID_Payload import ScannedIDPayload
@@ -53,7 +54,8 @@ def run_mosip_auth(payload: ScannedIDPayload) -> bool:
                 consent=True,
             )
             data = response.json()
-            print(data)
+            print("MOSIP Auth request response:")
+            pprint(data)
             return data.get("response", {}).get("authStatus", False)
         except Exception:
             print("Identity service unavailable")
@@ -67,7 +69,8 @@ def run_mosip_auth(payload: ScannedIDPayload) -> bool:
 # [4] Entry endpoint
 @app.post("/enterRequest")
 async def enter_request(payload: ScannedIDPayload):
-    print(payload)
+    print("QR Payload:")
+    pprint(payload)
     if not run_mosip_auth(payload):
         return {"authStatus": False, "status": "not in MOSIP"}
 
