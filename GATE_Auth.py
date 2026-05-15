@@ -17,7 +17,7 @@ authenticator = MOSIPAuthenticator(config=config)
 app = FastAPI()
 
 DUMMY_URL = "https://cs145-iot-cup-1745973870.ap-southeast-1.elb.amazonaws.com"
-useMock = True
+useMock = False
 
 # [3] Shared MOSIP auth helper
 def run_mosip_auth(payload: ScannedIDPayload, mock = False) -> bool:
@@ -107,3 +107,9 @@ async def exit_request(payload: ScannedIDPayload):
 async def reset_state():
     success, status = process_reset()
     return {"authStatus": success, "status": status}
+
+@app.post("/switchServer")
+def switch_server():
+    global useMock
+    useMock = not useMock
+    return {"isUsingMockServer": useMock}
