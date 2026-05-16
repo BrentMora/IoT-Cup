@@ -231,7 +231,7 @@
 
   /* ── Table ── */
   .table-scroll { flex: 1; overflow: auto; background: var(--surface); min-height: 0; }
-  table { width: 100%; border-collapse: collapse; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; }
   thead th {
     position: sticky; top: 0; z-index: 1;
     background: var(--bg);
@@ -257,9 +257,9 @@
   tbody tr:hover { background: var(--surface2); }
   tbody tr.flash { animation: rowflash 0.9s ease; }
   @keyframes rowflash { 0% { background: var(--accent-lt); } 100% { background: transparent; } }
-  td { padding: 11px 18px; font-size: 17px; vertical-align: middle; max-width: 300px; }
+  td { padding: 11px 18px; font-size: 17px; vertical-align: middle; max-width: 300px; overflow: hidden; }
 
-  .cell-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cell-text { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   .bool-chip {
     display: inline-flex; align-items: center; gap: 5px;
