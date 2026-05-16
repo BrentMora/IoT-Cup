@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Live Monitor</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600&family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #f7f7fc;
+    --surface:   #ffffff;
+    --surface2:  #f0eeff;
+    --border:    #e3e0f8;
+    --border2:   #ccc8f0;
+    --text:      #19162e;
+    --muted:     #7b76a8;
+    --subtle:    #a8a4cc;
+    --accent:    #5548e8;
+    --accent-lt: #ebe9ff;
+    --green:     #16a34a;
+    --green-lt:  #dcfce7;
+    --red:       #dc2626;
+    --red-lt:    #fee2e2;
+    --amber:     #b45309;
+    --amber-lt:  #fef3c7;
+    --blue:      #1d6fb8;
+    --log-bg:    #15132a;
+    --log-bdr:   #2a2650;
+    --log-dim:   #4a4675;
+    --log-text:  #c4c0e8;
+    --log-green: #6ee7b7;
+    --radius:    10px;
+    --radius-sm: 6px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    font-size: 18px;
+    line-height: 1.55;
+    overflow: hidden;
+  }
+
+  .app {
+    display: grid;
+    grid-template-rows: auto auto 1fr;
+    height: 100vh;
+  }
+
+  /* ── Topbar ── */
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 0 22px;
+    height: 56px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    box-shadow: 0 1px 4px rgba(85,72,232,0.07);
+    flex-shrink: 0;
+  }
+  .logo {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: -0.3px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .logo-gem {
+    width: 10px; height: 10px;
+    background: var(--accent);
+    border-radius: 2px;
+    transform: rotate(45deg);
+  }
+  .divider { width: 1px; height: 22px; background: var(--border); flex-shrink: 0; }
+
+  .status-row { display: flex; align-items: center; gap: 7px; }
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--border2);
+    flex-shrink: 0;
+    transition: background 0.3s, box-shadow 0.3s;
+  }
+  .dot.ok { background: var(--green); box-shadow: 0 0 0 3px var(--green-lt); }
+  .dot.err { background: var(--red); box-shadow: 0 0 0 3px var(--red-lt); }
+  .dot.connecting { background: #f59e0b; box-shadow: 0 0 0 3px var(--amber-lt); animation: blink 1s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+  .status-label {
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    font-size: 14.5px;
+    color: var(--muted);
+  }
+  .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+  .pill {
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    font-size: 13.5px;
+    font-weight: 500;
+    padding: 3px 10px;
+    border-radius: 20px;
+    border: 1.5px solid var(--border);
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .pill.live    { border-color: #bbf7d0; color: var(--green);  background: var(--green-lt); }
+  .pill.poll    { border-color: #bfdbfe; color: var(--blue);   background: #eff6ff; }
+  .pill.accent  { border-color: #c4bfff; color: var(--accent); background: var(--accent-lt); }
+
+  .btn {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 16px;
+    font-weight: 500;
+    padding: 6px 15px;
+    background: var(--surface);
+    border: 1.5px solid var(--border2);
+    border-radius: var(--radius-sm);
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-lt); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { background: #4438d4; border-color: #4438d4; }
+
+  /* ── Topbar text — darker overrides ── */
+  .topbar .status-label { color: #404040; }
+  .topbar .pill         { color: #404040; }
+  .topbar .btn          { color: #404040; }
+
+  /* ── Config panel ── */
+  .config-panel {
+    background: var(--surface);
+    border-bottom: 1.5px solid var(--border);
+    padding: 18px 22px;
+    display: none;
+    flex-wrap: wrap;
+    gap: 14px;
+    align-items: flex-end;
+  }
+  .config-panel.open { display: flex; }
+
+  .field { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 190px; }
+  .field.narrow  { max-width: 210px; }
+  .field.xnarrow { max-width: 175px; }
+  .field label {
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--muted);
+  }
+  .field input,
+  .field select {
+    background: var(--bg);
+    border: 1.5px solid var(--border2);
+    border-radius: var(--radius-sm);
+    padding: 8px 12px;
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    font-size: 15.5px;
+    color: var(--text);
+    outline: none;
+    height: 38px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .field input:focus,
+  .field select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-lt); }
+
+  .config-hint {
+    width: 100%;
+    font-size: 15.5px;
+    line-height: 1.85;
+    color: var(--muted);
+    background: var(--surface2);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 11px 15px;
+  }
+  .config-hint strong { color: var(--accent); font-weight: 600; }
+  .config-hint code {
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    font-size: 14.5px;
+    background: var(--border);
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: var(--text);
+  }
+
+  /* ── Main panels ── */
+  .panels {
+    display: grid;
+    grid-template-rows: 1fr 1fr;
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  .data-panel {
+    display: flex;
+    flex-direction: column;
+    border-bottom: 1.5px solid var(--border);
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .panel-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 22px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+  }
+  .panel-title {
+    font-size: 14.5px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    color: #3d3d3d;
+  }
+  .panel-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .last-sync {
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    font-size: 14px;
+    color: var(--subtle);
+  }
+
+  /* ── Table ── */
+  .table-scroll { flex: 1; overflow: auto; background: var(--surface); min-height: 0; }
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    position: sticky; top: 0; z-index: 1;
+    background: var(--bg);
+    padding: 9px 18px;
+    text-align: left;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--subtle);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .type-tag {
+    margin-left: 4px;
+    font-size: 12px;
+    font-style: italic;
+    opacity: 0.55;
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    font-weight: 400;
+  }
+  tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+  tbody tr:hover { background: var(--surface2); }
+  tbody tr.flash { animation: rowflash 0.9s ease; }
+  @keyframes rowflash { 0% { background: var(--accent-lt); } 100% { background: transparent; } }
+  td { padding: 11px 18px; font-size: 17px; vertical-align: middle; max-width: 300px; }
+
+  .cell-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .bool-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 11px; border-radius: 20px;
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    font-size: 14.5px; font-weight: 500;
+  }
+  .bool-chip.t { background: var(--green-lt); color: var(--green); border: 1.5px solid #bbf7d0; }
+  .bool-chip.f { background: var(--red-lt);   color: var(--red);   border: 1.5px solid #fecaca; }
+  .bool-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+
+  .dt-wrap { display: flex; flex-direction: column; gap: 1px; }
+  .dt-date { font-family: 'Plus Jakarta Sans', system-ui, sans-serif; font-size: 15.5px; }
+  .dt-time { font-family: 'Plus Jakarta Sans', system-ui, sans-serif; font-size: 14px; color: var(--muted); }
+  .dt-ago  { font-size: 14px; color: var(--subtle); }
+
+  .num-cell { font-family: 'Plus Jakarta Sans', system-ui, sans-serif; font-size: 16px; color: var(--accent); font-weight: 500; }
+
+  .center-state {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; height: 100%; gap: 9px; padding: 40px;
+    font-size: 17px; color: var(--subtle); text-align: center;
+  }
+  .center-state .icon { font-size: 33px; opacity: 0.2; }
+
+  /* ── Log panel ── */
+  .log-panel { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+  .log-controls { display: flex; align-items: center; gap: 6px; }
+  .log-count { font-family: 'Plus Jakarta Sans', system-ui, sans-serif; font-size: 14px; color: var(--subtle); margin-right: 2px; }
+
+  .log-btn {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 14.5px; font-weight: 500;
+    padding: 4px 10px;
+    background: transparent;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--subtle);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .log-btn:hover { border-color: var(--border2); color: var(--muted); }
+  .log-btn.active { border-color: #c4bfff; color: var(--accent); background: var(--accent-lt); }
+
+  /* Terminal — stays dark for readability */
+  .terminal {
+    flex: 1; min-height: 0;
+    overflow-y: auto;
+    padding: 14px 22px;
+    background: var(--log-bg);
+    border-top: 2px solid var(--log-bdr);
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 1.75;
+  }
+  .log-entry { display: flex; gap: 16px; animation: fadeup .18s ease; }
+  @keyframes fadeup { from { opacity:0; transform:translateY(2px); } to { opacity:1; transform:none; } }
+
+  .log-ts  { color: var(--log-dim); flex-shrink: 0; user-select: none; }
+  .log-lvl { flex-shrink: 0; width: 46px; font-weight: 600; font-size: 14px; letter-spacing: .05em; }
+  .log-msg { color: var(--log-green); word-break: break-all; flex: 1; }
+
+  .log-lvl.INFO  { color: #818cf8; }
+  .log-lvl.WARN  { color: #fbbf24; }
+  .log-lvl.ERROR { color: #f87171; }
+  .log-lvl.FATAL { color: #fb7185; }
+  .log-lvl.DEBUG { color: var(--log-dim); }
+  .log-lvl.SYS   { color: #a78bfa; }
+  .log-msg.WARN  { color: #fde68a; }
+  .log-msg.ERROR,
+  .log-msg.FATAL { color: #fca5a5; }
+  .log-msg.DEBUG { color: var(--log-dim); }
+  .log-msg.SYS   { color: #c4b5fd; font-style: italic; }
+
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+  .terminal::-webkit-scrollbar-thumb { background: #2a2650; }
+
+  #toast {
+    position: fixed; bottom: 22px; right: 22px;
+    background: var(--surface);
+    border: 1.5px solid var(--border2);
+    border-radius: var(--radius);
+    padding: 10px 18px;
+    font-size: 16px; font-weight: 500;
+    color: var(--text);
+    opacity: 0; transform: translateY(6px);
+    transition: all 0.22s;
+    pointer-events: none; z-index: 100;
+    max-width: 340px;
+    box-shadow: 0 4px 20px rgba(85,72,232,0.1);
+  }
+  #toast.show { opacity: 1; transform: none; }
+  #toast.ok   { border-color: #bbf7d0; color: var(--green);  background: var(--green-lt); }
+  #toast.err  { border-color: #fecaca; color: var(--red);    background: var(--red-lt); }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="logo"><div class="logo-gem"></div>Live Monitor</div>
+    <div class="divider"></div>
+
+    <div class="status-row">
+      <div class="dot" id="sbDot"></div>
+      <span class="status-label" id="sbStatus">not connected</span>
+    </div>
+    <span class="pill" id="sbPill">supabase</span>
+
+    <div class="divider"></div>
+
+    <div class="status-row">
+      <div class="dot" id="awsDot"></div>
+      <span class="status-label" id="awsStatus">no endpoint</span>
+    </div>
+    <span class="pill" id="awsPill">aws logs</span>
+
+    <div class="topbar-right">
+      <span class="pill accent" id="rowPill">— rows</span>
+      <span class="pill poll">↻ 500 ms</span>
+      <button class="btn" onclick="toggleConfig()" id="cfgBtn">⚙ Config</button>
+    </div>
+  </header>
+
+  <!-- Config panel -->
+  <div class="config-panel" id="configPanel">
+    <div class="field">
+      <label>Supabase Project URL</label>
+      <input type="text" id="cfgUrl" placeholder="https://xxxx.supabase.co" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>Supabase Anon Key</label>
+      <input type="password" id="cfgKey" placeholder="eyJhbGciO...">
+    </div>
+    <div class="field narrow">
+      <label>Table Name</label>
+      <input type="text" id="cfgTable" placeholder="my_table">
+    </div>
+    <div class="field">
+      <label>AWS Log Endpoint URL</label>
+      <input type="text" id="cfgLogUrl" placeholder="http://your-server/logs">
+    </div>
+    <div class="field xnarrow">
+      <label>Log Format</label>
+      <select id="cfgLogFmt">
+        <option value="text">Plain text (default)</option>
+        <option value="json-array">JSON array of strings</option>
+        <option value="json-obj">JSON {logs:[...]} object</option>
+      </select>
+    </div>
+    <div style="display:flex;align-items:flex-end;">
+      <button class="btn primary" onclick="saveAndConnect()">Connect →</button>
+    </div>
+
+    <div class="config-hint">
+      <strong>Supabase realtime:</strong> enable Realtime for your table in the Supabase dashboard, then run
+      <code>ALTER TABLE your_table REPLICA IDENTITY FULL;</code><br>
+      <strong>AWS logs:</strong> add <code>logs-endpoint.js</code> to your server — two lines, see <code>SETUP.md</code>.
+      The endpoint accepts <code>?since=&lt;timestamp&gt;</code> so each 500 ms poll only fetches new lines.
+    </div>
+  </div>
+
+  <!-- Panels -->
+  <div class="panels">
+
+    <!-- Data panel -->
+    <div class="data-panel">
+      <div class="panel-head">
+        <span class="panel-title">Supabase — Live Data</span>
+        <span class="pill live">● realtime</span>
+        <div class="panel-right">
+          <span class="last-sync" id="lastSync">—</span>
+          <button class="log-btn" onclick="manualRefresh()">↺ refresh</button>
+        </div>
+      </div>
+      <div class="table-scroll" id="tableWrap">
+        <div class="center-state">
+          <div class="icon">◇</div>
+          <span>Open Config to connect to Supabase</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Log panel -->
+    <div class="log-panel">
+      <div class="panel-head">
+        <span class="panel-title">AWS — Console Output</span>
+        <span class="pill poll">↻ 500 ms</span>
+        <div class="panel-right">
+          <span class="log-count" id="logCount">0 lines</span>
+          <div class="log-controls">
+            <button class="log-btn" id="pauseBtn" onclick="togglePause()">⏸ pause</button>
+            <button class="log-btn" onclick="clearLogs()">✕ clear</button>
+            <button class="log-btn active" id="scrollBtn" onclick="toggleAutoScroll()">↓ auto-scroll</button>
+          </div>
+        </div>
+      </div>
+      <div class="terminal" id="terminal"></div>
+    </div>
+
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// State
+let sbClient = null, sbChannel = null;
+let rows = [], colMeta = [];
+let logLines = 0, paused = false, autoScroll = true;
+let pollTimer = null, lastLogTs = null;
+let cfg = { url:'', key:'', table:'', logUrl:'', logFmt:'text' };
+
+// Init
+(function init() {
+  const saved = localStorage.getItem('lm_cfg');
+  if (saved) {
+    try {
+      cfg = { ...cfg, ...JSON.parse(saved) };
+      document.getElementById('cfgUrl').value    = cfg.url;
+      document.getElementById('cfgKey').value    = cfg.key;
+      document.getElementById('cfgTable').value  = cfg.table;
+      document.getElementById('cfgLogUrl').value = cfg.logUrl;
+      document.getElementById('cfgLogFmt').value = cfg.logFmt;
+      if (cfg.url && cfg.key && cfg.table) { saveAndConnect(); return; }
+    } catch(e) {}
+  }
+  toggleConfig();
+  addLog('SYS', 'Dashboard ready — open Config above to get started.');
+})();
+
+// Config
+function toggleConfig() {
+  const open = document.getElementById('configPanel').classList.toggle('open');
+  document.getElementById('cfgBtn').textContent = open ? '✕ Close' : '⚙ Config';
+}
+
+function saveAndConnect() {
+  cfg.url    = document.getElementById('cfgUrl').value.trim().replace(/\/$/, '');
+  cfg.key    = document.getElementById('cfgKey').value.trim();
+  cfg.table  = document.getElementById('cfgTable').value.trim();
+  cfg.logUrl = document.getElementById('cfgLogUrl').value.trim().replace(/\/$/, '');
+  cfg.logFmt = document.getElementById('cfgLogFmt').value;
+  localStorage.setItem('lm_cfg', JSON.stringify(cfg));
+
+  if (!cfg.url || !cfg.key || !cfg.table) { toast('err', 'Fill in Supabase URL, Anon Key, and Table Name.'); return; }
+  connectSupabase();
+  if (cfg.logUrl) startPolling();
+  else addLog('SYS', 'No AWS log endpoint set — add one in Config to stream server logs.');
+
+  document.getElementById('configPanel').classList.remove('open');
+  document.getElementById('cfgBtn').textContent = '⚙ Config';
+}
+
+// Supabase
+function setDbDot(state, label) {
+  document.getElementById('sbDot').className = 'dot ' + (state === 'ok' ? 'ok' : state === 'err' ? 'err' : 'connecting');
+  document.getElementById('sbStatus').textContent = label;
+  document.getElementById('sbPill').className = 'pill' + (state === 'ok' ? ' live' : '');
+}
+
+function connectSupabase() {
+  setDbDot('connecting', 'connecting…');
+  if (sbChannel && sbClient) { sbClient.removeChannel(sbChannel); sbChannel = null; }
+  sbClient = supabase.createClient(cfg.url, cfg.key);
+  loadRows();
+  sbChannel = sbClient.channel('lm-rt')
+    .on('postgres_changes', { event:'*', schema:'public', table:cfg.table }, handleRT)
+    .subscribe(s => {
+      if (s === 'SUBSCRIBED') { setDbDot('ok','realtime connected'); toast('ok','Supabase connected ✓'); }
+      else if (['CHANNEL_ERROR','TIMED_OUT'].includes(s)) setDbDot('err', s.toLowerCase().replace('_',' '));
+    });
+}
+
+async function loadRows() {
+  if (!sbClient) return;
+  try {
+    const { data, error } = await sbClient.from(cfg.table).select('*');
+    if (error) throw error;
+    rows = data || [];
+    if (rows.length) detectCols(rows[0]);
+    renderTable(); syncStamp();
+    document.getElementById('rowPill').textContent = rows.length + ' rows';
+    if (!document.getElementById('sbDot').classList.contains('ok')) setDbDot('ok','connected');
+  } catch(e) {
+    setDbDot('err','query failed');
+    renderErr(e.message);
+    toast('err', 'Supabase: ' + e.message);
+  }
+}
+
+function handleRT({ eventType, new:nw, old:ol }) {
+  if      (eventType === 'INSERT') { rows.unshift(nw); if (!colMeta.length && nw) detectCols(nw); addLog('INFO',`[supabase] INSERT → ${cfg.table}`); }
+  else if (eventType === 'UPDATE') { const i=rows.findIndex(r=>rid(r)===rid(ol)); if(i!==-1)rows[i]=nw; addLog('INFO',`[supabase] UPDATE → ${cfg.table}`); }
+  else if (eventType === 'DELETE') { rows=rows.filter(r=>rid(r)!==rid(ol)); addLog('WARN',`[supabase] DELETE → ${cfg.table}`); }
+  renderTable(); syncStamp();
+  document.getElementById('rowPill').textContent = rows.length + ' rows';
+  setTimeout(()=>{ const tr=document.querySelector('#tableWrap tbody tr'); if(tr){tr.classList.add('flash');tr.addEventListener('animationend',()=>tr.classList.remove('flash'),{once:true});} },20);
+}
+
+function rid(r) { return r && (r.id ?? r.uuid ?? JSON.stringify(r)); }
+function manualRefresh() { loadRows(); }
+
+// Column detection
+const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
+function dtype(v) {
+  if (typeof v === 'boolean') return 'bool';
+  if (typeof v === 'string' && ISO_RE.test(v)) return 'datetime';
+  if (typeof v === 'number') return 'number';
+  return 'text';
+}
+function detectCols(row) { colMeta = Object.entries(row).map(([k,v])=>({key:k,type:dtype(v)})); }
+
+// Table rendering
+function renderTable() {
+  const w = document.getElementById('tableWrap');
+  if (!rows.length) { w.innerHTML=`<div class="center-state"><div class="icon">○</div><span>No rows in <strong>${esc(cfg.table)}</strong></span></div>`; return; }
+  const h = colMeta.map(c=>`<th>${esc(c.key)}<span class="type-tag">${c.type}</span></th>`).join('');
+  const b = rows.map((r,i)=>`<tr id="r${i}">${colMeta.map(c=>`<td>${cell(r[c.key],c.type)}</td>`).join('')}</tr>`).join('');
+  w.innerHTML = `<table><thead><tr>${h}</tr></thead><tbody>${b}</tbody></table>`;
+}
+
+function cell(v, type) {
+  if (v===null||v===undefined) return `<span style="color:var(--subtle);font-style:italic">null</span>`;
+  if (type==='bool') { const b=Boolean(v); return `<span class="bool-chip ${b?'t':'f'}"><span class="bool-dot"></span>${b?'true':'false'}</span>`; }
+  if (type==='datetime') { const d=new Date(v); if(isNaN(d))return esc(String(v)); return `<div class="dt-wrap"><span class="dt-date">${d.toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'})}</span><span class="dt-time">${d.toLocaleTimeString()}</span><span class="dt-ago">${ago(d)}</span></div>`; }
+  if (type==='number') return `<span class="num-cell">${Number(v).toLocaleString()}</span>`;
+  return `<span class="cell-text" title="${escA(String(v))}">${esc(String(v))}</span>`;
+}
+
+function renderErr(m) { document.getElementById('tableWrap').innerHTML=`<div class="center-state"><div class="icon" style="color:var(--red)">✕</div><span style="color:var(--red)">${esc(m)}</span></div>`; }
+function syncStamp() { document.getElementById('lastSync').textContent='synced '+new Date().toLocaleTimeString(); }
+
+// AWS polling
+function setAwsDot(state, label) {
+  document.getElementById('awsDot').className = 'dot '+(state==='ok'?'ok':state==='err'?'err':'connecting');
+  document.getElementById('awsStatus').textContent = label;
+  document.getElementById('awsPill').className = 'pill'+(state==='ok'?' poll':'');
+}
+
+function startPolling() {
+  if (pollTimer) clearInterval(pollTimer);
+  if (!cfg.logUrl) return;
+  setAwsDot('connecting','connecting…');
+  pollLogs();
+  pollTimer = setInterval(pollLogs, 500);
+}
+
+async function pollLogs() {
+  if (paused || !cfg.logUrl) return;
+  try {
+    const url = lastLogTs ? `${cfg.logUrl}?since=${encodeURIComponent(lastLogTs)}` : cfg.logUrl;
+    const res = await fetch(url, { cache:'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const raw = await res.text();
+    setAwsDot('ok','polling ok');
+    if (raw.trim()) parseAppend(raw);
+  } catch(e) { setAwsDot('err','poll failed'); }
+}
+
+function parseAppend(raw) {
+  let lines = [];
+  if (cfg.logFmt==='json-array') { try{lines=JSON.parse(raw);}catch{lines=[raw];} }
+  else if (cfg.logFmt==='json-obj') { try{const o=JSON.parse(raw);lines=o.logs||o.messages||o.data||[raw];}catch{lines=[raw];} }
+  else { lines = raw.split('\n'); }
+
+  for (const line of lines) {
+    const s = String(line).trim();
+    if (!s) continue;
+    addLog(classify(s), s);
+    const m = s.match(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?/);
+    if (m) lastLogTs = m[0];
+  }
+  if (!lastLogTs) lastLogTs = new Date().toISOString();
+}
+
+function classify(l) {
+  const u = l.toUpperCase();
+  if (u.includes('FATAL'))     return 'FATAL';
+  if (u.includes('ERROR')||u.includes('EXCEPTION')) return 'ERROR';
+  if (u.includes('WARN'))      return 'WARN';
+  if (u.includes('DEBUG'))     return 'DEBUG';
+  return 'INFO';
+}
+
+// Log rendering
+function addLog(level, msg) {
+  const term = document.getElementById('terminal');
+  const ts = new Date().toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const d = document.createElement('div');
+  d.className = 'log-entry';
+  d.innerHTML = `<span class="log-ts">${ts}</span><span class="log-lvl ${level}">${level}</span><span class="log-msg ${level}">${esc(msg)}</span>`;
+  term.appendChild(d);
+  logLines++;
+  document.getElementById('logCount').textContent = logLines+(logLines===1?' line':' lines');
+  if (autoScroll) term.scrollTop = term.scrollHeight;
+  const ee = term.querySelectorAll('.log-entry');
+  if (ee.length > 2000) ee[0].remove();
+}
+
+function clearLogs() {
+  document.getElementById('terminal').innerHTML='';
+  logLines=0; lastLogTs=null;
+  document.getElementById('logCount').textContent='0 lines';
+  addLog('SYS','Log cleared.');
+}
+
+function togglePause() {
+  paused = !paused;
+  const b = document.getElementById('pauseBtn');
+  b.textContent = paused ? '▶ resume' : '⏸ pause';
+  b.classList.toggle('active', paused);
+  if (!paused && cfg.logUrl) startPolling();
+}
+
+function toggleAutoScroll() {
+  autoScroll = !autoScroll;
+  document.getElementById('scrollBtn').classList.toggle('active', autoScroll);
+}
+
+// Helpers
+function ago(d) { const s=Math.round((Date.now()-d)/1000); if(s<60)return s+'s ago'; if(s<3600)return Math.round(s/60)+'m ago'; if(s<86400)return Math.round(s/3600)+'h ago'; return Math.round(s/86400)+'d ago'; }
+function esc(s)  { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function escA(s) { return esc(s).replace(/'/g,'&#39;'); }
+
+let _tt;
+function toast(type, msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = 'show '+type;
+  clearTimeout(_tt); _tt = setTimeout(()=>{ el.className=''; }, 3500);
+}
+</script>
+</body>
+</html>
