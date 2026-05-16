@@ -538,9 +538,12 @@ function setDbDot(state, label) {
   document.getElementById('sbPill').className = 'pill' + (state === 'ok' ? ' live' : '');
 }
 
+let dbPollTimer = null;
+
 function connectSupabase() {
   setDbDot('connecting', 'connecting…');
   if (sbChannel && sbClient) { sbClient.removeChannel(sbChannel); sbChannel = null; }
+  if (dbPollTimer) { clearInterval(dbPollTimer); dbPollTimer = null; }
   sbClient = supabase.createClient(cfg.url, cfg.key);
   loadRows();
   sbChannel = sbClient.channel('lm-rt')
@@ -549,6 +552,7 @@ function connectSupabase() {
       if (s === 'SUBSCRIBED') { setDbDot('ok','realtime connected'); toast('ok','Supabase connected ✓'); }
       else if (['CHANNEL_ERROR','TIMED_OUT'].includes(s)) setDbDot('err', s.toLowerCase().replace('_',' '));
     });
+  dbPollTimer = setInterval(loadRows, 500);
 }
 
 async function loadRows() {
