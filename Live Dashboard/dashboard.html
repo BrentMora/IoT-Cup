@@ -194,7 +194,7 @@
   /* ── Main panels ── */
   .panels {
     display: grid;
-    grid-template-rows: calc(50% + 15px) calc(50% - 15px);
+    grid-template-rows: 1fr 5px 1fr;
     overflow: hidden;
     min-height: 0;
   }
@@ -284,6 +284,17 @@
     font-size: 17px; color: var(--subtle); text-align: center;
   }
   .center-state .icon { font-size: 33px; opacity: 0.2; }
+
+  .resizer {
+    height: 5px;
+    background: var(--border);
+    cursor: row-resize;
+    flex-shrink: 0;
+    transition: background 0.15s;
+    position: relative;
+    z-index: 10;
+  }
+  .resizer:hover, .resizer.dragging { background: var(--accent); }
 
   /* ── Log panel ── */
   .log-panel { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
@@ -445,6 +456,9 @@
         </div>
       </div>
     </div>
+
+    <!-- Resizer -->
+    <div class="resizer" id="resizer"></div>
 
     <!-- Log panel -->
     <div class="log-panel">
@@ -683,7 +697,36 @@ function toggleAutoScroll() {
   document.getElementById('scrollBtn').classList.toggle('active', autoScroll);
 }
 
-// Helpers
+// Resizer drag logic
+(function() {
+  const resizer = document.getElementById('resizer');
+  const panels  = resizer.closest('.panels');
+  let startY, startTop, startBot;
+
+  resizer.addEventListener('mousedown', e => {
+    e.preventDefault();
+    resizer.classList.add('dragging');
+    startY = e.clientY;
+    const rows = getComputedStyle(panels).gridTemplateRows.split(' ');
+    startTop = parseFloat(rows[0]);
+    startBot = parseFloat(rows[2]);
+
+    function onMove(e) {
+      const dy = e.clientY - startY;
+      const newTop = Math.max(80, startTop + dy);
+      const newBot = Math.max(80, startBot - dy);
+      panels.style.gridTemplateRows = `${newTop}px 5px ${newBot}px`;
+    }
+    function onUp() {
+      resizer.classList.remove('dragging');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+})();
+
 function ago(d) { const s=Math.round((Date.now()-d)/1000); if(s<60)return s+'s ago'; if(s<3600)return Math.round(s/60)+'m ago'; if(s<86400)return Math.round(s/3600)+'h ago'; return Math.round(s/86400)+'d ago'; }
 function esc(s)  { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function escA(s) { return esc(s).replace(/'/g,'&#39;'); }
